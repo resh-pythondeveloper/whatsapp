@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: whatsapp_postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: whatsapp_db
+      POSTGRES_USER: whatsapp_user
+      POSTGRES_PASSWORD: whatsapp_password
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+
+  redis:
+    image: redis:7-alpine
+    container_name: whatsapp_redis
+    restart: unless-stopped
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis_data:/data
+
+
+volumes:
+  postgres_data:
+  redis_data:
