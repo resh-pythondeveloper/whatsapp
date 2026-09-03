@@ -14,7 +14,7 @@ User = get_user_model()
 @database_sync_to_async
 def get_user(user_id):
     try:
-        return User.objects.get(id=user_id)
+        return User.objects.get(id=user_id,is_active=True,)
     except User.DoesNotExist:
         return AnonymousUser()
 

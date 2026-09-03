@@ -1,110 +1,122 @@
-from apps.chats.models import (
-    Conversation,
-    ConversationMember,
-    Message,
-)
+from apps.chats.models import ConversationMember
 
 
 class ConversationService:
 
     @staticmethod
-    def get_unread_count(
-        conversation_id,
-        user_id,
-    ):
+    def get_unread_count(conversation_id, user_id):
+        """
+        Return the stored unread count for the user.
 
-        try:
+        ConversationMember.unread_count is the source of truth.
+        """
 
-            member = ConversationMember.objects.get(
+        membership = (
+            ConversationMember.objects
+            .filter(
                 conversation_id=conversation_id,
                 user_id=user_id,
                 is_active=True,
             )
+            .only("unread_count")
+            .first()
+        )
 
-        except ConversationMember.DoesNotExist:
-
+        if not membership:
             return 0
 
-        # Use last read time.
-        # If never read, start counting after joining.
-        read_from = (
-            member.last_read_at
-            or member.joined_at
-        )
-
-        return (
-            Message.objects.filter(
-                conversation_id=conversation_id,
-                created_at__gt=read_from,
-            )
-            .exclude(
-                sender_id=user_id
-            )
-            .count()
-        )
-
+        return membership.unread_count
 
     @staticmethod
-    def get_conversation_summary(
-        conversation_id,
-        user_id,
-    ):
+    def get_conversation_summary(conversation_id, user_id):
+        """
+        Return the conversation summary used by WebSocket
+        conversation_update events.
+
+        The unread count always comes from the user's
+        ConversationMember.unread_count.
+        """
 
         try:
-
-            conversation = Conversation.objects.get(
-                id=conversation_id
+            membership = (
+                ConversationMember.objects
+                .select_related(
+                    "conversation",
+                    "conversation__created_by",
+                )
+                .prefetch_related(
+                    "conversation__members__user",
+                )
+                .get(
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    is_active=True,
+                )
             )
-
-        except Conversation.DoesNotExist:
-
+        except ConversationMember.DoesNotExist:
             return None
+
+        conversation = membership.conversation
 
         last_message = (
             conversation.messages
+            .select_related("sender")
             .order_by("-created_at")
             .first()
         )
 
-        unread_count = (
-            ConversationService.get_unread_count(
-                conversation_id=conversation_id,
-                user_id=user_id,
-            )
-        )
-
         return {
-            "conversation_id": str(
-                conversation.id
-            ),
-
-            "conversation_type": (
-                conversation.conversation_type
-            ),
-
+            "conversation_id": str(conversation.id),
+            "conversation_type": conversation.conversation_type,
             "name": conversation.name,
 
-            "last_message": (
+            "created_by": {
+                "id": str(conversation.created_by.id),
+                "email": conversation.created_by.email,
+                "username": conversation.created_by.username,
+                "is_online": conversation.created_by.is_online,
+                "last_seen": (
+                    conversation.created_by.last_seen.isoformat()
+                    if conversation.created_by.last_seen
+                    else None
+                ),
+            } if conversation.created_by else None,
+
+            "members": [
                 {
-                    "id": str(last_message.id),
-                    "content": last_message.content,
-                    "message_type": (
-                        last_message.message_type
+                    "id": member.id,
+                    "user": {
+                        "id": str(member.user.id),
+                        "email": member.user.email,
+                        "username": member.user.username,
+                        "is_online": member.user.is_online,
+                        "last_seen": (
+                            member.user.last_seen.isoformat()
+                            if member.user.last_seen
+                            else None
+                        ),
+                    },
+                    "joined_at": member.joined_at.isoformat(),
+                    "last_read_at": (
+                        member.last_read_at.isoformat()
+                        if member.last_read_at
+                        else None
                     ),
-                    "sender_id": str(
-                        last_message.sender_id
-                    ),
-                    "created_at": (
-                        last_message.created_at.isoformat()
-                    ),
+                    "unread_count": member.unread_count,
                 }
-                if last_message
-                else None
-            ),
+                for member in conversation.members.all()
+            ],
 
-            "unread_count": unread_count,
+            "last_message": {
+                "id": str(last_message.id),
+                "content": last_message.content,
+                "message_type": last_message.message_type,
+                "sender_id": str(last_message.sender_id),
+                "created_at": last_message.created_at.isoformat(),
+            } if last_message else None,
 
-            "updated_at": (
-                conversation.updated_at.isoformat()
-            ),
+            "unread_count": membership.unread_count,
+
+            "created_at": conversation.created_at.isoformat(),
+            "updated_at": conversation.updated_at.isoformat(),
         }

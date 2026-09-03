@@ -2,7 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
-
+from django.contrib.postgres.indexes import GinIndex
 
 class Conversation(models.Model):
 
@@ -64,6 +64,9 @@ class ConversationMember(models.Model):
         null=True,
         blank=True
     )
+    unread_count = models.PositiveIntegerField(
+        default=0
+    )
 
     is_active = models.BooleanField(
         default=True
@@ -75,6 +78,11 @@ class ConversationMember(models.Model):
                 fields=["conversation", "user"],
                 name="unique_conversation_member"
             )
+        ]
+        indexes = [
+            models.Index(
+                fields=["user", "is_active"]
+            ),
         ]
 
     def __str__(self):
@@ -134,10 +142,27 @@ class Message(models.Model):
     )
 
     class Meta:
-        ordering = ["created_at"]
+    
+            ordering = ["created_at"]
+    
+            indexes = [
+                models.Index(
+                    fields=[
+                        "conversation",
+                        "-created_at",
+                    ]
+                ),
+                GinIndex(
+                fields=["content"],
+                name="message_content_trgm_idx",
+                opclasses=["gin_trgm_ops"],
+            ),
+            ]
 
     def __str__(self):
         return f"{self.sender} - {self.content[:30]}"
+
+   
 
 
 class MessageReceipt(models.Model):

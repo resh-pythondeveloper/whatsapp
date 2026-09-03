@@ -69,3 +69,16 @@ Django Application
                          (Cache + WebSocket Channel Layer)
 
 Next logical step: Step 13 — Read receipts optimization + message status aggregation (Sent → Delivered → Read).  
+
+
+Step 16A → Optimize Message queries
+Step 16B → Optimize Conversation list
+Step 16C → Unread count optimization
+Step 16D → Message search
+Step 16E → Edit message
+Step 16F → Delete message
+Step 16G → Group message handling
+Step 16H → Backend validation & permissions
+Step 16I → API testing
+Step 16J → WebSocket testing
+Step 16K → Backend performance optimization

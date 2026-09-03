@@ -1,5 +1,6 @@
 import json
-
+import logging
+import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
@@ -10,6 +11,9 @@ from apps.realtime.services.presence_service import (
 from apps.realtime.services.typing_service import (
     TypingService
 )
+from apps.chats.service.message_cache_service import (
+    MessageCacheService
+)
 from apps.chats.service.conversation_service import (
     ConversationService
 )
@@ -17,10 +21,13 @@ from apps.chats.service.conversation_service import (
 from apps.chats.service.message_status_service import (
     MessageStatusService,
 )
+from apps.chats.service.chat_service import ChatService
+logger = logging.getLogger(__name__)
 
 class ChatConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
+        self.typing_timeout_task = None
 
         # Get authenticated user from JWT middleware
         self.user = self.scope["user"]
@@ -44,6 +51,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         # Typing service
         self.typing_service = TypingService()
+        self.typing_timeout_task = None
 
         # Redis group name
         self.room_group_name = (
@@ -59,12 +67,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # Accept WebSocket
         await self.accept()
 
-        print(
-            f"User {self.user.id} connected to "
-            f"conversation {self.conversation_id}"
-        )
+        logger.info( "User %s connected to conversation %s", 
+                    self.user.id, self.conversation_id, )
 
     async def disconnect(self, close_code):
+
+        # Cancel automatic typing timeout task
+        if getattr(self, "typing_timeout_task", None) is not None:
+
+            self.typing_timeout_task.cancel()
+
+            try:
+                await self.typing_timeout_task
+            except asyncio.CancelledError:
+                pass
+
+            self.typing_timeout_task = None
 
         # Stop typing if connected
         if (
@@ -73,18 +91,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
             and hasattr(self, "user")
             and not self.user.is_anonymous
         ):
+            try:
 
-            state_changed = await self.typing_service.remove_typing(
+                state_changed = await self.typing_service.stop_typing(
                 conversation_id=self.conversation_id,
                 user_id=self.user.id,
             )
 
             # Notify other users
-            if (state_changed
-            and hasattr(self, "room_group_name")
-        ):
+                if (state_changed
+                    and hasattr(self, "room_group_name")
+                ):
 
-                await self.channel_layer.group_send(
+                    await self.channel_layer.group_send(
                     self.room_group_name,
                     {
                         "type": "typing_event",
@@ -96,6 +115,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         "is_typing": False,
                     }
                 )
+            except Exception: 
+                logger.exception( "Failed to remove typing state for user %s", self.user.id, )
 
         # Remove from Redis conversation group
         if hasattr(self, "room_group_name"):
@@ -105,10 +126,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 self.channel_name
             )
 
-        print(
-            f"User {self.user.id} disconnected. "
-            f"Code: {close_code}"
-        )
+        logger.info( "User %s disconnected from conversation %s. Code: %s", 
+                    getattr(self.user, "id", None), 
+                    getattr(self, "conversation_id", None), 
+                    close_code, )
 
     async def receive(self, text_data):
 
@@ -151,28 +172,127 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "Invalid action"
             )
 
+    async def typing_timeout(self):
+        """
+        Automatically stop typing after TYPING_TIMEOUT seconds
+        if the user does not send another typing event.
+        """
+
+        try:
+            await asyncio.sleep(
+                self.typing_service.TYPING_TIMEOUT
+            )
+
+            state_changed = await (
+                self.typing_service.stop_typing(
+                    conversation_id=self.conversation_id,
+                    user_id=self.user.id,
+                )
+            )
+
+            if not state_changed:
+                return
+
+            # Notify other users that typing has stopped
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "typing_event",
+
+                    "user_id": str(
+                        self.user.id
+                    ),
+
+                    "is_typing": False,
+                }
+            )
+
+            logger.info(
+                "Automatic typing timeout for user %s "
+                "in conversation %s",
+                self.user.id,
+                self.conversation_id,
+            )
+
+        except asyncio.CancelledError:
+            # Task was cancelled because:
+            # - user sent false
+            # - user sent another true
+            # - user sent a message
+            # - user disconnected
+            return
+
+        except Exception:
+            logger.exception(
+                "Automatic typing timeout failed "
+                "for user %s",
+                self.user.id,
+            )
+
     async def handle_typing(self, data):
 
         is_typing = data.get(
             "is_typing",
             False
         )
+        if not isinstance(is_typing, bool):
+            await self.send_error(
+                "is_typing must be true or false"
+            )
+            return
 
-        if is_typing:
+        try:
+            if is_typing:
 
-            # Store temporary typing state in Redis
-            state_changed =(await self.typing_service.start_typing(
+                # Store temporary typing state in Redis
+                state_changed =(await self.typing_service.start_typing(
                 conversation_id=self.conversation_id,
                 user_id=self.user.id,
             ))
+                # Cancel previous timeout task
+                if self.typing_timeout_task:
 
-        else:
+                    self.typing_timeout_task.cancel()
+
+                    try:
+                        await self.typing_timeout_task
+                    except asyncio.CancelledError:
+                        pass
+
+                    self.typing_timeout_task = None
+
+                # Start a new automatic timeout
+                self.typing_timeout_task = asyncio.create_task(
+                    self.typing_timeout()
+                )
+
+            else:
+                # Cancel automatic timeout task
+                if self.typing_timeout_task:
+
+                    self.typing_timeout_task.cancel()
+
+                    try:
+                        await self.typing_timeout_task
+                    except asyncio.CancelledError:
+                        pass
+
+                    self.typing_timeout_task = None
 
             # Remove typing state
-            state_changed = (await self.typing_service.stop_typing(
+                state_changed = (await self.typing_service.stop_typing(
                 conversation_id=self.conversation_id,
                 user_id=self.user.id,
             ))
+        except Exception:
+            logger.exception( "Typing service failed for user %s", 
+                             self.user.id, )
+            await self.send_error(
+                 "Typing service is temporarily unavailable." 
+                 )
+            return
+
+                
         if not state_changed:
             return
 
@@ -189,6 +309,62 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "is_typing": is_typing,
             }
         )
+
+    async def auto_stop_typing(self):
+
+        try:
+
+            # Wait for typing timeout
+            await asyncio.sleep(
+                self.typing_service.TYPING_TIMEOUT
+            )
+
+            logger.info(
+                "Typing timeout reached for user %s",
+                self.user.id,
+            )
+
+            # Remove Redis typing state
+            state_changed = await self.typing_service.stop_typing(
+                conversation_id=self.conversation_id,
+                user_id=self.user.id,
+            )
+
+            if not state_changed:
+                logger.info(
+                    "Typing state already removed for user %s",
+                    self.user.id,
+                )
+                return
+
+            # Tell other users typing has stopped
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "typing_event",
+                    "user_id": str(self.user.id),
+                    "is_typing": False,
+                }
+            )
+
+            logger.info(
+                "Automatic typing false sent for user %s",
+                self.user.id,
+            )
+
+        except asyncio.CancelledError:
+
+            logger.info(
+                "Typing timeout cancelled for user %s",
+                self.user.id,
+            )
+
+        except Exception:
+
+            logger.exception(
+                "Automatic typing timeout failed for user %s",
+                self.user.id,
+            )
 
     async def typing_event(self, event):
 
@@ -218,6 +394,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         if (
             not message_content
+            or not isinstance(message_content, str)
             or not message_content.strip()
         ):
             await self.send_error(
@@ -227,17 +404,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         # Clear typing status
         # Stop typing when message is sent
-        state_changed = (
-            await self.typing_service.stop_typing(
-                conversation_id=self.conversation_id,
-                user_id=self.user.id,
+        if self.typing_timeout_task:
+
+            self.typing_timeout_task.cancel()
+
+            self.typing_timeout_task = None
+
+        try:
+            state_changed = (
+                await self.typing_service.stop_typing(
+                    conversation_id=self.conversation_id,
+                    user_id=self.user.id,
+                )
             )
-        )
 
         # Broadcast only if user was actually typing
-        if state_changed:
+            if state_changed:
 
-            await self.channel_layer.group_send(
+                await self.channel_layer.group_send(
                 self.room_group_name,
                 {
                     "type": "typing_event",
@@ -249,11 +433,26 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "is_typing": False,
                 }
             )
+        except Exception:
+            logger.exception( "Failed to stop typing before message." )
 
         # Save message to PostgreSQL
-        message = await self.create_message(
-            content=message_content.strip()
-        )
+        try:
+            message = await self.create_message(
+                content=message_content.strip()
+            )
+        except Exception:
+            logger.exception( "Failed to create message for user %s", 
+                             self.user.id, )
+            await self.send_error("Failed to send message.")
+            return
+
+        # Invalidate message cache
+        try:
+            await self.invalidate_message_cache()
+        except Exception:
+            logger.exception( "Failed to invalidate message cache for conversation %s", 
+                             self.conversation_id, )
 
         # Broadcast through Redis
         await self.channel_layer.group_send(
@@ -282,7 +481,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 ),
             }
         )
-        # Update conversation list ⭐
+        # Update conversation list
         await self.broadcast_conversation_update()
 
 
@@ -301,7 +500,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             message_id
         )
 
-        if not result:
+        if result is None: 
+            await self.send_error( "Message not found." ) 
             return
 
         if not result["changed"]:
@@ -344,12 +544,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 id=message_id,
                 conversation_id=self.conversation_id
             )
+        except Message.DoesNotExist: 
+            return None
 
             # Sender cannot mark own message delivered
-            if message.sender_id == self.user.id:
-                return None
+        if message.sender_id == self.user.id:
+            return None
 
-            receipt, created = (
+        receipt, created = (
                 MessageReceipt.objects.get_or_create(
                     message=message,
                     user=self.user,
@@ -361,32 +563,32 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     }
                 )
             )
-            changed = created
+        changed = created
 
             # Existing receipt
-            if not created:
+        if not created:
 
                 # Already delivered or read
-                if receipt.status in [
+            if receipt.status in [
                     MessageReceipt.ReceiptStatus.DELIVERED,
                     MessageReceipt.ReceiptStatus.READ,
                 ]:
-                    return {
+                return {
                         "receipt": receipt,
                         "overall_status": message.status,
                         "changed": False,
                     }
 
-                receipt.status = (
+            receipt.status = (
                     MessageReceipt.ReceiptStatus.DELIVERED
                 )
 
-                receipt.delivered_at = (
+            receipt.delivered_at = (
                     receipt.delivered_at
                     or timezone.now()
                 )
 
-                receipt.save(
+            receipt.save(
                     update_fields=[
                         "status",
                         "delivered_at",
@@ -394,52 +596,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     ]
                 )
 
-                changed = True
+            changed = True
 
             # Recalculate overall message status
-            overall_status = (
+        overall_status = (
                 MessageStatusService
                 .update_message_status(
                     message.id
                 )
             )
 
-            return {
+        return {
                 "receipt": receipt,
                 "overall_status": overall_status,
                 "changed": changed,
             }
 
-        except Message.DoesNotExist:
-
-            return None
-
-    @database_sync_to_async
-    def validate_conversation_member(self):
-
-        return ConversationMember.objects.filter(
-            conversation_id=self.conversation_id,
-            user=self.user,
-            is_active=True
-        ).exists()
-
-    @database_sync_to_async
-    def create_message(self, content):
-
-        message = Message.objects.create(
-            conversation_id=self.conversation_id,
-            sender=self.user,
-            content=content,
-            message_type=Message.MessageType.TEXT,
-            status=Message.MessageStatus.SENT,
-        )
-        Conversation.objects.filter(
-            id=self.conversation_id
-        ).update(
-            updated_at=timezone.now()
-        )
-
-        return message
 
     async def chat_message(self, event):
 
@@ -461,16 +633,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
         )
 
-    async def send_error(self, message):
-
-        await self.send(
-            text_data=json.dumps(
-                {
-                    "type": "error",
-                    "message": message
-                }
-            )
-        )
     async def handle_read(self, data):
 
         message_id = data.get("message_id")
@@ -486,12 +648,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
             message_id
         )
 
-        if not result :
+        if result is None: 
+            await self.send_error( "Message not found." )
             return
 
         # Already READ → don't broadcast again
         if not result["changed"]:
             return
+
+        # Update the conversation read position up to this message.
+        # This does NOT blindly reset unread_count to zero.
+        read_state = await self.mark_conversation_read(message_id)
+
 
         receipt = result["receipt"]
 
@@ -523,6 +691,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
             }
         )
 
+        # Send updated unread count to the current user
+        await self.channel_layer.group_send(
+            f"user_{self.user.id}",
+            {
+                "type": "conversation_update",
+                "conversation": {
+                    "conversation_id": self.conversation_id,
+                    "unread_count": read_state["unread_count"],
+                    "last_read_at": (
+                        read_state["last_read_at"].isoformat()
+                        if read_state["last_read_at"]
+                        else None
+                    ),
+                },
+            },
+        )
+
+
     @database_sync_to_async
     def mark_read(self, message_id):
 
@@ -532,13 +718,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 id=message_id,
                 conversation_id=self.conversation_id,
             )
+        except Message.DoesNotExist: 
+            return None
 
             # Sender cannot mark own message as read
-            if message.sender_id == self.user.id:
-                return None
+        if message.sender_id == self.user.id:
+            return None
 
-            receipt, created = (
-                MessageReceipt.objects.get_or_create(
+        receipt, created = (
+            MessageReceipt.objects.get_or_create(
                     message=message,
                     user=self.user,
                     defaults={
@@ -552,33 +740,30 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     },
                 )
             )
-            changed = created
+        changed = created
 
             # If receipt already exists, update it to READ
-            if not created:
+        if not created:
 
                 # Already READ → avoid unnecessary DB update
-                if (
-                    receipt.status
-                    == MessageReceipt.ReceiptStatus.READ
-                ):
-                    return {
+            if (receipt.status== MessageReceipt.ReceiptStatus.READ):
+                return {
                         "receipt": receipt,
                         "overall_status": message.status,
                         "changed": False,
                     }
 
-                receipt.status = (
+            receipt.status = (
                     MessageReceipt.ReceiptStatus.READ
                 )
 
                 # Ensure delivered time exists
-                if not receipt.delivered_at:
-                    receipt.delivered_at = timezone.now()
+            if not receipt.delivered_at:
+                receipt.delivered_at = timezone.now()
 
-                receipt.read_at = timezone.now()
+            receipt.read_at = timezone.now()
 
-                receipt.save(
+            receipt.save(
                     update_fields=[
                         "status",
                         "delivered_at",
@@ -586,24 +771,30 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         "updated_at",
                     ]
                 )
-                changed = True
+            changed = True
 
-            # Recalculate overall message status
-            overall_status = (
+        # Recalculate overall message status
+        overall_status = (
                 MessageStatusService
                 .update_message_status(
                     message.id
                 )
             )
 
-            return {
+        return {
                 "receipt": receipt,
                 "overall_status": overall_status,
                 "changed": changed,
             }
 
-        except Message.DoesNotExist:
-            return None
+    @database_sync_to_async
+    def mark_conversation_read(self, message_id):
+        return ChatService.mark_conversation_as_read(
+            conversation_id=self.conversation_id,
+            user_id=self.user.id,
+            message_id=message_id,
+        )
+
 
     async def message_status(self, event):
 
@@ -641,6 +832,40 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
         )
+
+    @database_sync_to_async
+    def validate_conversation_member(self):
+
+        return ConversationMember.objects.filter(
+                conversation_id=self.conversation_id,
+                user=self.user,
+                is_active=True
+            ).exists()
+    
+    @database_sync_to_async
+    def create_message(self, content):
+    
+        return ChatService.send_message(
+                user=self.user,
+                conversation_id=self.conversation_id,
+                content=content,
+            )
+    
+    @database_sync_to_async
+    def invalidate_message_cache(
+            self,
+        ):
+        try:
+    
+            cache_service = MessageCacheService()
+        
+            cache_service.delete_conversation_cache(
+                    self.conversation_id
+                )
+        except Exception as exc:
+            print(f"Redis cache invalidation failed: {exc}")
+
+
     async def broadcast_conversation_update(self):
     
             member_ids = await (
@@ -674,7 +899,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_conversation_member_ids(self):
     
-            return list(
+        return list(
                 ConversationMember.objects.filter(
                     conversation_id=self.conversation_id,
                     is_active=True,
@@ -691,6 +916,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 ConversationService.get_conversation_summary(
                     conversation_id=self.conversation_id,
                     user_id=user_id,
+                )
+            )
+
+    async def send_error(self, message):
+    
+        await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "error",
+                        "message": message
+                    }
                 )
             )
 
@@ -720,30 +956,45 @@ class PresenceConsumer(AsyncWebsocketConsumer):
         self.presence_service = PresenceService()
 
         # Add WebSocket connection
-        connection_count = (
-            await self.presence_service.add_connection(
-                user_id=self.user.id,
-                connection_id=self.channel_name,
+        try:
+            connection_count = (
+                await self.presence_service.add_connection(
+                    user_id=self.user.id,
+                    connection_id=self.channel_name,
+                )
             )
-        )
+        except Exception:
+
+            logger .exception( "Failed to add presence connection for user %s",
+                              self.user.id, ) 
+            await self.channel_layer.group_discard( self.user_group_name, self.channel_name, ) 
+            await self.close(code=1011) 
+            return
 
         # Accept WebSocket
         await self.accept()
 
         # Send current presence status of related users
-        await self.send_initial_presence()
+        try:
+            await self.send_initial_presence()
+        except Exception: 
+            logger.exception( "Failed to send initial presence for user %s", 
+                             self.user.id, )
 
-        print(
-            f"User {self.user.id} connected. "
-            f"Connections: {connection_count}"
-        )
+        logger.info( "User %s connected. Connections: %s", 
+                    self.user.id, 
+                    connection_count, )
 
         # Broadcast ONLINE only for first connection
         if connection_count == 1:
+            try:
 
-            await self.broadcast_presence(
+                await self.broadcast_presence(
                 status="online"
             )
+            except Exception: 
+                logger.exception( "Failed to broadcast online status for user %s", 
+                                 self.user.id, )
 
     async def disconnect(self, close_code):
 
@@ -761,27 +1012,29 @@ class PresenceConsumer(AsyncWebsocketConsumer):
             and hasattr(self, "user")
             and not self.user.is_anonymous
         ):
+            try:
 
-            connection_count = (
+                connection_count = (
                 await self.presence_service.remove_connection(
                     user_id=self.user.id,
                     connection_id=self.channel_name,
                 )
-            )
-
-            print(
-                f"User {self.user.id} disconnected. "
-                f"Connections remaining: {connection_count}"
-            )
-
-            # Broadcast OFFLINE only for last connection
-            if connection_count == 0:
-                last_seen = await self.update_last_seen()
-
-                await self.broadcast_presence(
-                    status="offline",
-                    last_seen=last_seen.isoformat(),
                 )
+
+                logger.info( "User %s disconnected. Connections remaining: %s", 
+                        self.user.id, connection_count, )
+            
+                # Broadcast OFFLINE only for last connection
+                if connection_count == 0:
+                    last_seen = await self.update_last_seen()
+
+                    await self.broadcast_presence(
+                        status="offline",
+                        last_seen=last_seen.isoformat(),
+                    )
+            except Exception: 
+                logger.exception( "Failed to handle disconnect presence for user %s", 
+                                 self.user.id, )
 
     # ============================================================
     # BROADCAST PRESENCE
@@ -819,6 +1072,27 @@ class PresenceConsumer(AsyncWebsocketConsumer):
             )
 
     # ============================================================
+    # RECEIVE PRESENCE EVENT
+    # ============================================================
+
+    async def presence_update(self, event):
+
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "presence",
+
+                    "data": {
+                        "user_id": event["user_id"],
+
+                        "status": event["status"],
+                        "last_seen": event.get("last_seen"),
+                    }
+                }
+            )
+        )
+
+    # ============================================================
     # GET USERS WHO SHARE CONVERSATIONS
     # ============================================================
 
@@ -839,27 +1113,6 @@ class PresenceConsumer(AsyncWebsocketConsumer):
                 flat=True
             )
             .distinct()
-        )
-
-    # ============================================================
-    # RECEIVE PRESENCE EVENT
-    # ============================================================
-
-    async def presence_update(self, event):
-
-        await self.send(
-            text_data=json.dumps(
-                {
-                    "type": "presence",
-
-                    "data": {
-                        "user_id": event["user_id"],
-
-                        "status": event["status"],
-                        "last_seen": event.get("last_seen"),
-                    }
-                }
-            )
         )
 
     @database_sync_to_async
@@ -887,17 +1140,27 @@ class PresenceConsumer(AsyncWebsocketConsumer):
 
         user_ids = await self.get_related_user_ids()
 
+        if not user_ids: 
+            return
+
         last_seen_data = (await self.get_users_last_seen(
             user_ids
         ))
 
         for user_id in user_ids:
+            try:
 
-            is_online = await (
+                is_online = await (
                 self.presence_service.is_online(
                     user_id
                 )
-            )
+                )
+            except Exception: 
+                logger.exception( "Failed to check presence for user %s", 
+                                 user_id, )
+                 # Redis unavailable. 
+                 # Don't assume the user is online. 
+                is_online = False
 
             await self.send(
                 text_data=json.dumps(

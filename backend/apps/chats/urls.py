@@ -4,8 +4,7 @@ from .views import (
     CreateOneToOneConversationView,
     CreateGroupConversationView,
     ConversationListView,
-    ConversationMessagesView,
-    SendMessageView,
+    SendMessageView,MessageListAPIView,MessageSearchAPIView
 )
 
 
@@ -31,7 +30,7 @@ urlpatterns = [
 
     path(
         "conversations/<uuid:conversation_id>/messages/",
-        ConversationMessagesView.as_view(),
+        MessageListAPIView.as_view(),
         name="conversation-messages"
     ),
 
@@ -40,4 +39,10 @@ urlpatterns = [
         SendMessageView.as_view(),
         name="send-message"
     ),
+    path(
+        "conversations/<uuid:conversation_id>/messages/search/",
+        MessageSearchAPIView.as_view(),
+        name="message-search",
+    ),
+
 ]
