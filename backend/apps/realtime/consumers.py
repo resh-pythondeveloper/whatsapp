@@ -638,67 +638,50 @@ class ChatConsumer(AsyncWebsocketConsumer):
         message_id = data.get("message_id")
 
         if not message_id:
-
-            await self.send_error(
-                "message_id is required"
-            )
+            await self.send_error("message_id is required")
             return
 
-        result  = await self.mark_read(
-            message_id
-        )
+        # Mark all messages up to this message as READ
+        result = await self.mark_messages_read(message_id)
 
-        if result is None: 
-            await self.send_error( "Message not found." )
+        if result is None:
+            await self.send_error("Message not found.")
             return
 
-        # Already READ → don't broadcast again
-        if not result["changed"]:
-            return
-
-        # Update the conversation read position up to this message.
-        # This does NOT blindly reset unread_count to zero.
+        # Update conversation read position and unread count
         read_state = await self.mark_conversation_read(message_id)
 
+        # Broadcast status changes for all messages
+        for message_data in result["messages"]:
 
-        receipt = result["receipt"]
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    "type": "message_status",
 
-        overall_status = (
-            result["overall_status"]
-        )
+                    "message_id": message_data["message_id"],
 
-        # Notify conversation members
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                "type": "message_status",
+                    "user_id": str(self.user.id),
 
-                "message_id": message_id,
+                    "status": message_data["status"],
 
-                "user_id": str(self.user.id),
+                    "overall_status": message_data["overall_status"],
 
-                # Individual user's status
-                "status": receipt.status,
+                    "timestamp": message_data["timestamp"],
+                }
+            )
 
-                # Aggregated message status
-                "overall_status": overall_status,
-
-                "timestamp": (
-                    receipt.read_at.isoformat()
-                    if receipt.read_at
-                    else None
-                ),
-            }
-        )
-
-        # Send updated unread count to the current user
+        # Update unread count for current user
         await self.channel_layer.group_send(
             f"user_{self.user.id}",
             {
                 "type": "conversation_update",
+
                 "conversation": {
                     "conversation_id": self.conversation_id,
+
                     "unread_count": read_state["unread_count"],
+
                     "last_read_at": (
                         read_state["last_read_at"].isoformat()
                         if read_state["last_read_at"]
@@ -708,62 +691,74 @@ class ChatConsumer(AsyncWebsocketConsumer):
             },
         )
 
-
     @database_sync_to_async
-    def mark_read(self, message_id):
+    def mark_messages_read(self, message_id):
 
         try:
-
-            message = Message.objects.get(
+            target_message = Message.objects.get(
                 id=message_id,
                 conversation_id=self.conversation_id,
             )
-        except Message.DoesNotExist: 
+
+        except Message.DoesNotExist:
             return None
 
-            # Sender cannot mark own message as read
-        if message.sender_id == self.user.id:
+        # User must be a member
+        is_member = ConversationMember.objects.filter(
+            conversation_id=self.conversation_id,
+            user=self.user,
+            is_active=True,
+        ).exists()
+
+        if not is_member:
             return None
 
-        receipt, created = (
-            MessageReceipt.objects.get_or_create(
-                    message=message,
-                    user=self.user,
-                    defaults={
-                        "status": (
-                            MessageReceipt
-                            .ReceiptStatus
-                            .READ
-                        ),
-                        "delivered_at": timezone.now(),
-                        "read_at": timezone.now(),
-                    },
-                )
+        # Only messages sent by OTHER users can be marked as read
+        messages = (
+            Message.objects
+            .filter(
+                conversation_id=self.conversation_id,
+                created_at__lte=target_message.created_at,
             )
-        changed = created
+            .exclude(
+                sender_id=self.user.id
+            )
+            .order_by("created_at")
+        )
 
-            # If receipt already exists, update it to READ
-        if not created:
+        updated_messages = []
 
-                # Already READ → avoid unnecessary DB update
-            if (receipt.status== MessageReceipt.ReceiptStatus.READ):
-                return {
-                        "receipt": receipt,
-                        "overall_status": message.status,
-                        "changed": False,
-                    }
+        now = timezone.now()
 
-            receipt.status = (
-                    MessageReceipt.ReceiptStatus.READ
-                )
+        for message in messages:
 
-                # Ensure delivered time exists
-            if not receipt.delivered_at:
-                receipt.delivered_at = timezone.now()
+            receipt, created = MessageReceipt.objects.get_or_create(
+                message=message,
+                user=self.user,
+                defaults={
+                    "status": MessageReceipt.ReceiptStatus.READ,
+                    "delivered_at": now,
+                    "read_at": now,
+                },
+            )
 
-            receipt.read_at = timezone.now()
+            changed = created
 
-            receipt.save(
+            # Existing receipt
+            if not created:
+
+                # Already read
+                if receipt.status == MessageReceipt.ReceiptStatus.READ:
+                    continue
+
+                receipt.status = MessageReceipt.ReceiptStatus.READ
+
+                if not receipt.delivered_at:
+                    receipt.delivered_at = now
+
+                receipt.read_at = now
+
+                receipt.save(
                     update_fields=[
                         "status",
                         "delivered_at",
@@ -771,21 +766,39 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         "updated_at",
                     ]
                 )
-            changed = True
 
-        # Recalculate overall message status
-        overall_status = (
-                MessageStatusService
-                .update_message_status(
+                changed = True
+
+            if not changed:
+                continue
+
+            # Recalculate overall message status
+            overall_status = (
+                MessageStatusService.update_message_status(
                     message.id
                 )
             )
 
+            updated_messages.append(
+                {
+                    "message_id": str(message.id),
+
+                    "status": receipt.status,
+
+                    "overall_status": overall_status,
+
+                    "timestamp": (
+                        receipt.read_at.isoformat()
+                        if receipt.read_at
+                        else None
+                    ),
+                }
+            )
+
         return {
-                "receipt": receipt,
-                "overall_status": overall_status,
-                "changed": changed,
-            }
+            "messages": updated_messages
+        }
+
 
     @database_sync_to_async
     def mark_conversation_read(self, message_id):

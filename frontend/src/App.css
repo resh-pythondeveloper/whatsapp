@@ -557,3 +557,111 @@ body {
   cursor: not-allowed;
 }
 
+/* =========================
+   CHAT SEARCH BUTTON
+========================= */
+
+.chat-search-button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* =========================
+   MESSAGE SEARCH PANEL
+========================= */
+
+.message-search-panel {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+  background: #fff;
+}
+
+
+/* =========================
+   SEARCH INPUT
+========================= */
+
+.message-search-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.message-search-input input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+}
+
+.message-search-input button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+
+/* =========================
+   SEARCH RESULTS
+========================= */
+
+.message-search-results {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.message-search-result {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+
+.message-search-result:hover {
+  background: #f5f5f5;
+}
+
+.message-search-result-user {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.message-search-result-content {
+  font-size: 14px;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.message-search-result-time {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.message-search-status {
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.message-search-error {
+  padding: 10px;
+  font-size: 13px;
+}
+
+.loading-older-messages {
+  text-align: center;
+  padding: 10px;
+  font-size: 13px;
+}

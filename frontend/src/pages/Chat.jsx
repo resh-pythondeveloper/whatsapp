@@ -99,6 +99,31 @@ function Chat() {
     setMessageError,
   ] = useState("");
 
+  // =========================
+  // MESSAGE PAGINATION
+  // =========================
+
+  const [nextMessageCursor, setNextMessageCursor] =
+    useState(null);
+
+  const [loadingOlderMessages, setLoadingOlderMessages] =
+    useState(false);
+
+  const [hasMoreMessages, setHasMoreMessages] =
+    useState(true);
+
+  const messagesContainerRef = useRef(null);
+
+  // =========================
+  // MESSAGE SEARCH
+  // =========================
+
+  const [messageSearch, setMessageSearch] = useState("");
+  const [messageSearchResults, setMessageSearchResults] = useState([]);
+  const [messageSearchLoading, setMessageSearchLoading] = useState(false);
+  const [messageSearchError, setMessageSearchError] = useState("");
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+
 
   // =========================
   // MESSAGE INPUT
@@ -164,10 +189,20 @@ function Chat() {
       return;
     }
 
-    const latestReceivedMessage =
-      receivedMessages[
-        receivedMessages.length - 1
-      ];
+    const latestReceivedMessage = receivedMessages.reduce(
+      (latest, current) => {
+        if (!latest) return current;
+
+        return new Date(current.created_at) >
+          new Date(latest.created_at)
+          ? current
+          : latest;
+      },
+      null
+    );
+
+    if (!latestReceivedMessage) return;
+
     if (
       lastReadMessageRef.current ===
       String(latestReceivedMessage.id)
@@ -175,9 +210,8 @@ function Chat() {
       return;
     }
 
-    sendReadReceipt(
-      latestReceivedMessage.id
-    );
+    sendReadReceipt(latestReceivedMessage.id);
+
     lastReadMessageRef.current =
       String(latestReceivedMessage.id);
 
@@ -231,31 +265,33 @@ function Chat() {
       return;
     }
 
-    // =========================
-    // READ RECEIPT EVENT
-    // =========================
+    // ==========================================
+    // MESSAGE STATUS / READ RECEIPT
+    // ==========================================
 
-    if (data.type === "read" && data.data) {
+    if (data.type === "message_status" && data.data) {
 
       const messageId = String(data.data.message_id);
 
+      const overallStatus =
+        data.data.overall_status || data.data.status;
+
       console.log(
-        "Read receipt received:",
-        messageId
+        "Message status received:",
+        messageId,
+        overallStatus
       );
 
       setMessages((previousMessages) =>
         previousMessages.map((message) => {
 
-          if (
-            String(message.id) !== messageId
-          ) {
+          if (String(message.id) !== messageId) {
             return message;
           }
 
           return {
             ...message,
-            status: "read",
+            status: overallStatus,
           };
         })
       );
@@ -634,32 +670,61 @@ function Chat() {
         //   return;
         // }
 
-        // =========================
-        // CONVERSATION UPDATE
-        // =========================
+            // ==========================================
+            // CONVERSATION UPDATE / UNREAD COUNT
+            // ==========================================
 
-        if (
-          data.type === "conversation_update" &&
-          data.data
-        ) {
-          const update = data.data;
+            if (data.type === "conversation_update" && data.data) {
+              const update  = data.data;
 
-          setConversations((previousConversations) =>
-            previousConversations.map((conversation) => {
-              if (
-                String(conversation.id) !==
-                String(update.conversation_id)
-              ) {
-                return conversation;
-              }
+              const conversationId = String(
+                update.conversation_id
+              );
 
-              return {
-                ...conversation,
-                ...update,
-              };
-            })
-          );
-        }
+              console.log(
+                "Conversation update received:",
+                update
+              );
+
+              setConversations((previousConversations) =>
+                previousConversations.map((conversation) => {
+                  if (String(conversation.id) !== conversationId) {
+                    return conversation;
+                  }
+
+                  return {
+                    ...conversation,
+
+                    // Update unread count
+                    unread_count:
+                      update.unread_count ??
+                      conversation.unread_count ??
+                      0,
+
+                    // Update read position
+                    last_read_at:
+                      update.last_read_at ??
+                      conversation.last_read_at,
+
+                    // Keep latest preview if backend provides it
+                    last_message:
+                      update.last_message ??
+                      conversation.last_message,
+
+                    updated_at:
+                      update.updated_at ??
+                      conversation.updated_at,
+
+                    members:
+                      update.members ??
+                      conversation.members,
+                  };
+                })
+              );
+
+              return;
+            }
+
       } catch (error) {
         console.error(
           "Invalid presence WebSocket message:",
@@ -709,6 +774,27 @@ function Chat() {
       }
     };
   }, [user]);
+
+  useEffect(() => {
+  if (
+    !loadingMessages &&
+    messages.length > 0 &&
+    selectedConversation
+  ) {
+    const container =
+      messagesContainerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    container.scrollTop =
+      container.scrollHeight;
+  }
+}, [
+  selectedConversation,
+  loadingMessages,
+]);
 
   const loadConversations = async () => {
 
@@ -862,7 +948,239 @@ function Chat() {
     );
   };
 
+  // =========================
+  // SEARCH MESSAGES
+  // =========================
 
+  const searchMessages = async (searchText) => {
+    const query = searchText.trim();
+
+    if (!selectedConversation) {
+      return;
+    }
+
+    if (!query) {
+      setMessageSearchResults([]);
+      setMessageSearchError("");
+      return;
+    }
+
+    try {
+      setMessageSearchLoading(true);
+      setMessageSearchError("");
+
+      const accessToken =
+        localStorage.getItem("access_token");
+
+      if (!accessToken) {
+        setMessageSearchError("Access token not found.");
+        return;
+      }
+
+      const url =
+        `http://127.0.0.1:8000/api/v1/chats/conversations/` +
+        `${selectedConversation.id}/messages/search/?q=${encodeURIComponent(query)}`;
+
+      console.log("Searching messages:", query);
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Search failed with status ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      console.log("Message search response:", data);
+
+      let results = [];
+
+      if (Array.isArray(data)) {
+        results = data;
+      } else if (Array.isArray(data?.data)) {
+        results = data.data;
+      } else if (Array.isArray(data?.results)) {
+        results = data.results;
+      }
+
+      setMessageSearchResults(results);
+
+    } catch (error) {
+      console.error(
+        "Message search failed:",
+        error
+      );
+
+      setMessageSearchResults([]);
+      setMessageSearchError(
+        "Unable to search messages."
+      );
+
+    } finally {
+      setMessageSearchLoading(false);
+    }
+  };
+
+  const handleMessageSearchChange = (event) => {
+    const value = event.target.value;
+
+    setMessageSearch(value);
+
+    searchMessages(value);
+  };
+
+  const handleSearchResultClick = (message) => {
+    const messageElement = document.getElementById(
+      `message-${message.id}`
+    );
+
+    if (messageElement) {
+      messageElement.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+
+    setShowMessageSearch(false);
+  };
+
+  // =========================
+  // LOAD OLDER MESSAGES
+  // =========================
+
+  const loadOlderMessages = async () => {
+    if (
+      !selectedConversation ||
+      !nextMessageCursor ||
+      loadingOlderMessages ||
+      !hasMoreMessages
+    ) {
+      return;
+    }
+
+    const container =
+      messagesContainerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    try {
+      setLoadingOlderMessages(true);
+
+      // Save current scroll position
+      const previousScrollHeight =
+        container.scrollHeight;
+
+      const previousScrollTop =
+        container.scrollTop;
+
+      const response =
+        await getMessages(
+          selectedConversation.id,
+          nextMessageCursor
+        );
+
+      let olderMessages = [];
+
+      if (Array.isArray(response)) {
+        olderMessages = response;
+      } else if (
+        Array.isArray(response?.data)
+      ) {
+        olderMessages = response.data;
+      } else if (
+        Array.isArray(response?.results)
+      ) {
+        olderMessages = response.results;
+      }
+
+      // Add older messages before existing messages
+      setMessages((previousMessages) => {
+        const existingIds = new Set(
+          previousMessages.map(
+            (message) => String(message.id)
+          )
+        );
+
+        const uniqueOlderMessages =
+          olderMessages.filter(
+            (message) =>
+              !existingIds.has(
+                String(message.id)
+              )
+          );
+
+        return [
+          ...uniqueOlderMessages,
+          ...previousMessages,
+        ];
+      });
+
+      // Update cursor
+      setNextMessageCursor(
+        response?.next || null
+      );
+
+      setHasMoreMessages(
+        Boolean(response?.next)
+      );
+
+      // Restore scroll position after DOM update
+      requestAnimationFrame(() => {
+        const newScrollHeight =
+          container.scrollHeight;
+
+        container.scrollTop =
+          previousScrollTop +
+          (newScrollHeight -
+            previousScrollHeight);
+      });
+
+    } catch (error) {
+      console.error(
+        "Failed to load older messages:",
+        error
+      );
+
+      setMessageError(
+        "Unable to load older messages."
+      );
+
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  };
+
+  // =========================
+  // MESSAGE SCROLL
+  // =========================
+
+  const handleMessagesScroll = () => {
+    const container =
+      messagesContainerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    // Near the top
+    if (
+      container.scrollTop <= 100 &&
+      hasMoreMessages &&
+      !loadingOlderMessages
+    ) {
+      loadOlderMessages();
+    }
+  };
     
       // =========================
   // OPEN CONVERSATION
@@ -872,6 +1190,28 @@ function Chat() {
     async (conversation) => {
 
       setSelectedConversation(conversation);
+      setShowMessageSearch(false);
+      setMessageSearch("");
+      setMessageSearchResults([]);
+      setMessageSearchError("");
+
+      // Immediately clear local unread badge
+      setConversations((previousConversations) =>
+        previousConversations.map((item) => {
+
+          if (
+            String(item.id) !==
+            String(conversation.id)
+          ) {
+            return item;
+          }
+
+          return {
+            ...item,
+            unread_count: 0,
+          };
+        })
+      );
 
       lastReadMessageRef.current = null;
       
@@ -889,6 +1229,10 @@ function Chat() {
 
       setMessageText("");
 
+      setNextMessageCursor(null);
+      setHasMoreMessages(true);
+      setLoadingOlderMessages(false);
+
       setLoadingMessages(true);
 
 
@@ -896,7 +1240,7 @@ function Chat() {
 
         const response =
           await getMessages(
-            conversation.id
+            conversation.id,null
           );
 
 
@@ -942,8 +1286,14 @@ function Chat() {
         // SET MESSAGES
         // =========================
 
-        setMessages(
-          loadedMessages
+        setMessages(loadedMessages);
+
+        setNextMessageCursor(
+          response?.next || null
+        );
+
+        setHasMoreMessages(
+          Boolean(response?.next)
         );
 
         // Connect WebSocket
@@ -1193,6 +1543,10 @@ function Chat() {
     setMessageText("");
 
     setMessageError("");
+    setShowMessageSearch(false);
+    setMessageSearch("");
+    setMessageSearchResults([]);
+    setMessageSearchError("");
 
     };
 
@@ -1558,6 +1912,21 @@ function Chat() {
                     )}
 
               </div>
+              <button
+                className="chat-search-button"
+                onClick={() => {
+                  setShowMessageSearch(
+                    (previous) => !previous
+                  );
+
+                  setMessageSearch("");
+                  setMessageSearchResults([]);
+                  setMessageSearchError("");
+                }}
+                title="Search messages"
+              >
+                <Search size={20} />
+              </button>
 
             </div>
 
@@ -1566,7 +1935,125 @@ function Chat() {
                 MESSAGES
             ========================= */}
 
-            <div className="messages-container">
+            {showMessageSearch && (
+              <div className="message-search-panel">
+
+                <div className="message-search-input">
+
+                  <Search size={18} />
+
+                  <input
+                    type="text"
+                    placeholder="Search messages..."
+                    value={messageSearch}
+                    onChange={
+                      handleMessageSearchChange
+                    }
+                    autoFocus
+                  />
+
+                  {messageSearch && (
+                    <button
+                      onClick={() => {
+                        setMessageSearch("");
+                        setMessageSearchResults([]);
+                        setMessageSearchError("");
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+
+                </div>
+
+                {/* Loading */}
+
+                {messageSearchLoading && (
+                  <div className="message-search-status">
+                    Searching...
+                  </div>
+                )}
+
+                {/* Error */}
+
+                {messageSearchError && (
+                  <div className="message-search-error">
+                    {messageSearchError}
+                  </div>
+                )}
+
+                {/* Empty */}
+
+                {!messageSearchLoading &&
+                  messageSearch.trim() &&
+                  !messageSearchError &&
+                  messageSearchResults.length === 0 && (
+                    <div className="message-search-status">
+                      No messages found.
+                    </div>
+                  )}
+
+                {/* Results */}
+
+                {messageSearchResults.length > 0 && (
+                  <div className="message-search-results">
+
+                    {messageSearchResults.map(
+                      (message) => (
+                        <div
+                          key={message.id}
+                          className="message-search-result"
+                          onClick={() =>
+                            handleSearchResultClick(
+                              message
+                            )
+                          }
+                        >
+
+                          <div className="message-search-result-user">
+
+                            {message.sender?.username ||
+                              message.sender?.email ||
+                              "User"}
+
+                          </div>
+
+                          <div className="message-search-result-content">
+
+                            {message.content}
+
+                          </div>
+
+                          <div className="message-search-result-time">
+
+                            {message.created_at &&
+                              new Date(
+                                message.created_at
+                              ).toLocaleString(
+                                [],
+                                {
+                                  dateStyle: "short",
+                                  timeStyle: "short",
+                                }
+                              )}
+
+                          </div>
+
+                        </div>
+                      )
+                    )}
+
+                  </div>
+                )}
+
+              </div>
+            )}
+
+            <div
+              className="messages-container"
+              ref={messagesContainerRef}
+              onScroll={handleMessagesScroll}
+            >
 
 
               {loadingMessages && (
@@ -1624,6 +2111,7 @@ function Chat() {
                     return (
 
                       <div
+                        id={`message-${message.id}`}
                         key={message.id}
                         className={`message-row ${
                           isOwnMessage
