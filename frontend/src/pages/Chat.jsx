@@ -458,7 +458,7 @@ function Chat() {
 
 
     const websocketUrl =
-        `ws://127.0.0.1:8000/ws/chat/${conversationId}/?token=${encodeURIComponent(
+        `wss://whatsapp-veus.onrender.com/ws/chat/${conversationId}/?token=${encodeURIComponent(
         accessToken
         )}`;
 
