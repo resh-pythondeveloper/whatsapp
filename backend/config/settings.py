@@ -70,6 +70,7 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://whatsapp-1-wunu.onrender.com",
 ]
 
 if os.getenv("FRONTEND_URL"):
@@ -78,6 +79,7 @@ if os.getenv("FRONTEND_URL"):
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://whatsapp-1-wunu.onrender.com",
 ]
 
 if os.getenv("FRONTEND_URL"):
