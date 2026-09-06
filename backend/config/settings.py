@@ -111,12 +111,14 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 if os.getenv("DATABASE_URL"):
+    # Render / Production
     DATABASES = {
-        "default": dj_database_url.config(
-            default=os.getenv("DATABASE_URL")
+        "default": dj_database_url.parse(
+            os.getenv("DATABASE_URL")
         )
     }
 else:
+    # Local development
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -124,7 +126,7 @@ else:
             "USER": os.getenv("POSTGRES_USER"),
             "PASSWORD": os.getenv("POSTGRES_PASSWORD"),
             "HOST": os.getenv("POSTGRES_HOST", "localhost"),
-            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+            "PORT": os.getenv("POSTGRES_PORT", "5433"),
         }
     }
 

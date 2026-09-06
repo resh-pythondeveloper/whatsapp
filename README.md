@@ -150,3 +150,18 @@ Step 12  Multiple Device Presence   ⏳
 ⬜ Step 18: Delete/edit message
 ⬜ Step 19: Notifications
 ⬜ Step 20: Final WhatsApp-style UI + production cleanup
+
+⭐ My top choices
+ConvoX — modern and professional
+Talksy — simple and friendly
+Connectly — good for a communication platform
+ChatFlow — clear and developer-friendly
+Conversa — professional and clean
+TalkHub — suitable for a messaging app
+NexChat — modern tech feel
+Chatter — simple messaging identity
+VibeChat — casual/social
+LinkTalk — emphasizes connection
+
+ConvoX – Real-Time Conversation Platform
+Built a real-time messaging platform using Django REST Framework, Django Channels, WebSockets, Redis, and PostgreSQL, supporting one-to-one/group conversations, typing indicators, online presence, message delivery/read receipts, unread counts, and message search.

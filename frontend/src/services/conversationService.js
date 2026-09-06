@@ -1,7 +1,50 @@
 import api from "./api";
 
+/* =========================
+   GET CONVERSATIONS
+========================= */
+
 export const getConversations = async () => {
-  const response = await api.get("/chats/conversations/");
+  const response = await api.get(
+    "/chats/conversations/"
+  );
+
+  return response.data;
+};
+
+
+/* =========================
+   SEARCH USERS
+========================= */
+
+export const searchUsers = async (query) => {
+  const response = await api.get(
+    "/accounts/users/search/",
+    {
+      params: {
+        q: query,
+      },
+    }
+  );
+
+  return response.data;
+};
+
+
+/* =========================
+   CREATE / GET ONE-TO-ONE
+   CONVERSATION
+========================= */
+
+export const createOneToOneConversation = async (
+  userId
+) => {
+  const response = await api.post(
+    "/chats/conversations/one-to-one/",
+    {
+      user_id: userId,
+    }
+  );
 
   return response.data;
 };
@@ -15,38 +58,40 @@ export const getMessages = async (
   conversationId,
   cursor = null
 ) => {
-  let url = `/chats/conversations/${conversationId}/messages/`;
+  let url =
+    `/chats/conversations/${conversationId}/messages/`;
 
-  /*
-   * DRF CursorPagination returns `next` as a complete URL.
-   *
-   * Example:
-   * http://127.0.0.1:8000/api/v1/chats/conversations/ID/messages/?cursor=xxxxx
-   *
-   * We only need the cursor value.
-   */
   if (cursor) {
     try {
+      // Supports DRF's complete "next" URL
       const cursorUrl = new URL(cursor);
 
       const cursorValue =
         cursorUrl.searchParams.get("cursor");
 
       if (cursorValue) {
-        url += `?cursor=${encodeURIComponent(cursorValue)}`;
+        url +=
+          `?cursor=${encodeURIComponent(
+            cursorValue
+          )}`;
       }
+
     } catch (error) {
-      /*
-       * If cursor is already just the cursor token,
-       * use it directly.
-       */
-      url += `?cursor=${encodeURIComponent(cursor)}`;
+      // Supports cursor token directly
+      url +=
+        `?cursor=${encodeURIComponent(
+          cursor
+        )}`;
     }
   }
 
-  console.log("Fetching messages:", url);
+  console.log(
+    "Fetching messages:",
+    url
+  );
 
-  const response = await api.get(url);
+  const response =
+    await api.get(url);
 
   return response.data;
 };
@@ -63,7 +108,8 @@ export const sendMessage = async (
   const response = await api.post(
     "/chats/messages/send/",
     {
-      conversation_id: conversationId,
+      conversation_id:
+        conversationId,
       content: content,
     }
   );
