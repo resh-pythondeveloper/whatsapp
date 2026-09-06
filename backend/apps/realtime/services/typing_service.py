@@ -1,5 +1,5 @@
 import redis.asyncio as redis
-
+import os
 
 class TypingService:
 
@@ -7,9 +7,11 @@ class TypingService:
 
     def __init__(self):
 
-        self.redis = redis.Redis(
-            host="127.0.0.1",
-            port=6379,
+        self.redis = redis.from_url(
+            os.getenv(
+                "REDIS_URL",
+                "redis://127.0.0.1:6379"
+            ),
             decode_responses=True,
         )
 
