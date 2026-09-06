@@ -469,6 +469,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "sender_id": str(
                     message.sender_id
                 ),
+                "sender": {
+                    "id": message.sender_id,
+                    "username": message.sender.username,
+                    "email": message.sender.email,
+                },
+
 
                 "content": message.content,
 
@@ -619,11 +625,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
             text_data=json.dumps(
                 {
                     "type": "message",
-
                     "data": {
                         "id": event["message_id"],
                         "conversation_id": event["conversation_id"],
+
                         "sender_id": event["sender_id"],
+
+                        # ADD THIS
+                        "sender": event["sender"],
+
                         "content": event["content"],
                         "message_type": event["message_type"],
                         "status": event["status"],

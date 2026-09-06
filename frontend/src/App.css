@@ -849,3 +849,168 @@ body {
   text-align: center;
   font-size: 14px;
 }
+.message-sender-name {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* =========================================================
+   CREATE GROUP
+========================================================= */
+
+.create-group-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.create-group-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.group-name-section {
+  padding: 12px 0;
+}
+
+.group-name-section input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  outline: none;
+}
+
+.selected-group-members {
+  padding: 8px 0;
+}
+
+.selected-members-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.selected-member-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 15px;
+  font-size: 13px;
+}
+
+.selected-member-chip button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.create-group-submit-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.create-group-submit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   GROUP MEMBER SELECTION
+========================================================= */
+
+.user-search-item.selected {
+  font-weight: 600;
+}
+
+/* =========================================================
+   GROUP MESSAGE SENDER
+========================================================= */
+
+.message-sender-name {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.selected-group-count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.create-group-footer {
+  padding: 12px;
+  border-top: 1px solid #ddd;
+}
+
+.create-group-submit-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.create-group-submit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.selected-group-members {
+  padding: 8px 12px;
+}
+
+.selected-members-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.selected-member-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 15px;
+  font-size: 13px;
+}
+
+.selected-member-chip button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+}

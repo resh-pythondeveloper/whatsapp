@@ -5,10 +5,7 @@ import api from "./api";
 ========================= */
 
 export const getConversations = async () => {
-  const response = await api.get(
-    "/chats/conversations/"
-  );
-
+  const response = await api.get("/chats/conversations/");
   return response.data;
 };
 
@@ -18,33 +15,31 @@ export const getConversations = async () => {
 ========================= */
 
 export const searchUsers = async (query) => {
-  const response = await api.get(
-    "/accounts/users/search/",
-    {
-      params: {
-        q: query,
-      },
-    }
-  );
-
+  const response = await api.get("/accounts/users/search/", {
+    params: { q: query },
+  });
   return response.data;
 };
 
+/* =========================
+   SHOW ALL USERS
+========================= */
+
+export const listUsers = async () => {
+  const response = await api.get("/accounts/users/");
+
+  return response.data;
+};
 
 /* =========================
    CREATE / GET ONE-TO-ONE
    CONVERSATION
 ========================= */
 
-export const createOneToOneConversation = async (
-  userId
-) => {
-  const response = await api.post(
-    "/chats/conversations/one-to-one/",
-    {
-      user_id: userId,
-    }
-  );
+export const createOneToOneConversation = async (userId) => {
+  const response = await api.post("/chats/conversations/one-to-one/", {
+    user_id: userId,
+  });
 
   return response.data;
 };
@@ -101,18 +96,20 @@ export const getMessages = async (
    SEND MESSAGE
 ========================= */
 
-export const sendMessage = async (
-  conversationId,
-  content
-) => {
-  const response = await api.post(
-    "/chats/messages/send/",
-    {
-      conversation_id:
-        conversationId,
-      content: content,
-    }
-  );
+export const sendMessage = async (conversationId, content) => {
+  const response = await api.post("/chats/messages/send/", {
+    conversation_id: conversationId,
+    content,
+  });
+
+  return response.data;
+};
+
+export const createGroupConversation = async (name, memberIds) => {
+  const response = await api.post("/chats/conversations/group/", {
+    name,
+    member_ids: memberIds,
+  });
 
   return response.data;
 };

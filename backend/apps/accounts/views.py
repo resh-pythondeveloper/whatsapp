@@ -121,7 +121,7 @@ class UserSearchView(APIView):
         )
 
         # =====================================================
-        # SEARCH BY USERNAME IF QUERY EXISTS
+        # SEARCH BY USERNAME
         # =====================================================
 
         if query:
@@ -150,3 +150,19 @@ class UserSearchView(APIView):
         ]
 
         return Response(data)
+
+
+class ListUsersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        users = (
+            User.objects
+            .filter(is_active=True)
+            .exclude(id=request.user.id)
+            .order_by("username")
+        )
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data,status=status.HTTP_200_OK)
+
+        

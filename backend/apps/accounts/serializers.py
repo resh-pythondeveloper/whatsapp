@@ -82,9 +82,9 @@ class UserSerializer(serializers.ModelSerializer):
 
         fields = [
             "id",
-            "email",
+            # "email",
             "username",
-            "profile_image",
+            # "profile_image",
             "is_online",
             "last_seen",
             "created_at",

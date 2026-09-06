@@ -7,15 +7,18 @@ import {
   ArrowLeft,
   Send,
   Plus,
+  Users,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
 
 import {
   getConversations,
-  getMessages,
   searchUsers,
+  listUsers,
   createOneToOneConversation,
+  createGroupConversation,
+  getMessages,
 } from "../services/conversationService";
 
 import api from "../services/api";
@@ -67,13 +70,33 @@ function Chat() {
 
   const [userSearch, setUserSearch] = useState("");
 
-  const [userSearchResults, setUserSearchResults] =
-    useState([]);
+  const [userSearchResults, setUserSearchResults] = useState([]);
 
   const [userSearchLoading, setUserSearchLoading] =
     useState(false);
 
+  const [groupUsers, setGroupUsers] = useState([]);
+
+  const [groupUsersLoading, setGroupUsersLoading] =
+    useState(false);
+
+  // =========================================================
+  // START CONVERSATION / GROUP
+  // =========================================================
+
   const [showStartConversation, setShowStartConversation] =
+    useState(false);
+
+  const [showCreateGroup, setShowCreateGroup] =
+    useState(false);
+
+  const [groupName, setGroupName] =
+    useState("");
+
+  const [selectedGroupMembers, setSelectedGroupMembers] =
+    useState([]);
+
+  const [creatingGroup, setCreatingGroup] =
     useState(false);
 
   const userSearchRequestRef = useRef(0);
@@ -90,9 +113,12 @@ function Chat() {
   // =========================================================
 
   const [messages, setMessages] = useState([]);
+
   const [loadingMessages, setLoadingMessages] =
     useState(false);
-  const [messageError, setMessageError] = useState("");
+
+  const [messageError, setMessageError] =
+    useState("");
 
   // =========================================================
   // MESSAGE PAGINATION
@@ -115,13 +141,18 @@ function Chat() {
   // MESSAGE SEARCH
   // =========================================================
 
-  const [messageSearch, setMessageSearch] = useState("");
+  const [messageSearch, setMessageSearch] =
+    useState("");
+
   const [messageSearchResults, setMessageSearchResults] =
     useState([]);
+
   const [messageSearchLoading, setMessageSearchLoading] =
     useState(false);
+
   const [messageSearchError, setMessageSearchError] =
     useState("");
+
   const [showMessageSearch, setShowMessageSearch] =
     useState(false);
 
@@ -129,7 +160,9 @@ function Chat() {
   // MESSAGE INPUT
   // =========================================================
 
-  const [messageText, setMessageText] = useState("");
+  const [messageText, setMessageText] =
+    useState("");
+
   const [sendingMessage, setSendingMessage] =
     useState(false);
 
@@ -163,6 +196,7 @@ function Chat() {
       const parsedUrl = new URL(url);
 
       return parsedUrl.searchParams.get("cursor");
+
     } catch (error) {
       console.error(
         "Failed to parse pagination URL:",
@@ -296,18 +330,19 @@ function Chat() {
       return;
     }
 
-    const receivedMessages = messages.filter(
-      (message) => {
-        const senderId =
-          message.sender?.id ??
-          message.sender_id;
+    const receivedMessages =
+      messages.filter(
+        (message) => {
+          const senderId =
+            message.sender?.id ??
+            message.sender_id;
 
-        return (
-          String(senderId) !==
-          String(user?.id)
-        );
-      }
-    );
+          return (
+            String(senderId) !==
+            String(user?.id)
+          );
+        }
+      );
 
     if (!receivedMessages.length) {
       return;
@@ -320,8 +355,12 @@ function Chat() {
             return current;
           }
 
-          return new Date(current.created_at) >
-            new Date(latest.created_at)
+          return new Date(
+            current.created_at
+          ) >
+            new Date(
+              latest.created_at
+            )
             ? current
             : latest;
         },
@@ -372,16 +411,21 @@ function Chat() {
     const {
       previousScrollTop,
       previousScrollHeight,
-    } = pendingScrollRestoreRef.current;
+    } =
+      pendingScrollRestoreRef.current;
 
     const newScrollHeight =
       container.scrollHeight;
 
     container.scrollTop =
       previousScrollTop +
-      (newScrollHeight - previousScrollHeight);
+      (
+        newScrollHeight -
+        previousScrollHeight
+      );
 
-    pendingScrollRestoreRef.current = null;
+    pendingScrollRestoreRef.current =
+      null;
 
   }, [messages]);
 
@@ -402,7 +446,9 @@ function Chat() {
         return;
       }
 
-      if (pendingScrollRestoreRef.current) {
+      if (
+        pendingScrollRestoreRef.current
+      ) {
         return;
       }
 
@@ -461,7 +507,8 @@ function Chat() {
             typingTimeoutRef.current
           );
 
-          typingTimeoutRef.current = null;
+          typingTimeoutRef.current =
+            null;
         }
       }
 
@@ -502,6 +549,7 @@ function Chat() {
 
               return {
                 ...message,
+
                 status:
                   overallStatus ||
                   message.status,
@@ -523,21 +571,22 @@ function Chat() {
       data.type === "message" &&
       data.data
     ) {
-      incomingMessage = data.data;
-    }
+      incomingMessage =
+        data.data;
 
-    else if (
+    } else if (
       data.type === "message" &&
       data.message
     ) {
-      incomingMessage = data.message;
-    }
+      incomingMessage =
+        data.message;
 
-    else if (
+    } else if (
       data.id &&
       data.content
     ) {
-      incomingMessage = data;
+      incomingMessage =
+        data;
     }
 
     if (!incomingMessage) {
@@ -573,7 +622,8 @@ function Chat() {
         typingTimeoutRef.current
       );
 
-      typingTimeoutRef.current = null;
+      typingTimeoutRef.current =
+        null;
     }
 
     // =======================================================
@@ -586,7 +636,9 @@ function Chat() {
           previousMessages.some(
             (message) =>
               String(message.id) ===
-              String(normalizedMessage.id)
+              String(
+                normalizedMessage.id
+              )
           );
 
         if (alreadyExists) {
@@ -609,7 +661,9 @@ function Chat() {
         previousConversations.map(
           (conversation) => {
             if (
-              String(conversation.id) !==
+              String(
+                conversation.id
+              ) !==
               String(
                 normalizedMessage.conversation_id
               )
@@ -695,9 +749,12 @@ function Chat() {
     );
 
     const socket =
-      new WebSocket(websocketUrl);
+      new WebSocket(
+        websocketUrl
+      );
 
-    websocketRef.current = socket;
+    websocketRef.current =
+      socket;
 
     socket.onopen = () => {
       console.log(
@@ -705,23 +762,30 @@ function Chat() {
       );
 
       if (
-        websocketRef.current === socket
+        websocketRef.current ===
+        socket
       ) {
         setSocketConnected(true);
       }
     };
 
-    socket.onmessage = (event) => {
+    socket.onmessage = (
+      event
+    ) => {
       try {
         const data =
-          JSON.parse(event.data);
+          JSON.parse(
+            event.data
+          );
 
         console.log(
           "Chat WebSocket message:",
           data
         );
 
-        handleWebSocketMessage(data);
+        handleWebSocketMessage(
+          data
+        );
 
       } catch (error) {
         console.error(
@@ -732,20 +796,27 @@ function Chat() {
       }
     };
 
-    socket.onerror = (error) => {
+    socket.onerror = (
+      error
+    ) => {
       console.error(
         "Chat WebSocket error:",
         error
       );
 
       if (
-        websocketRef.current === socket
+        websocketRef.current ===
+        socket
       ) {
-        setSocketConnected(false);
+        setSocketConnected(
+          false
+        );
       }
     };
 
-    socket.onclose = (event) => {
+    socket.onclose = (
+      event
+    ) => {
       console.log(
         "Chat WebSocket disconnected:",
         event.code,
@@ -753,10 +824,15 @@ function Chat() {
       );
 
       if (
-        websocketRef.current === socket
+        websocketRef.current ===
+        socket
       ) {
-        websocketRef.current = null;
-        setSocketConnected(false);
+        websocketRef.current =
+          null;
+
+        setSocketConnected(
+          false
+        );
       }
     };
   };
@@ -765,240 +841,274 @@ function Chat() {
   // CONNECT PRESENCE WEBSOCKET
   // =========================================================
 
-  const connectPresenceWebSocket = () => {
-    const accessToken =
-      localStorage.getItem(
-        "access_token"
-      );
-
-    if (!accessToken) {
-      console.error(
-        "Access token not found for presence."
-      );
-
-      return;
-    }
-
-    if (!WS_BASE_URL) {
-      console.error(
-        "VITE_WS_BASE_URL is not configured."
-      );
-
-      return;
-    }
-
-    if (
-      presenceWebsocketRef.current
-    ) {
-      presenceWebsocketRef.current.close();
-
-      presenceWebsocketRef.current = null;
-    }
-
-    setPresenceConnected(false);
-
-    const presenceUrl =
-      `${WS_BASE_URL}/ws/presence/?token=${encodeURIComponent(
-        accessToken
-      )}`;
-
-    console.log(
-      "Connecting Presence WebSocket:",
-      presenceUrl.replace(
-        accessToken,
-        "ACCESS_TOKEN"
-      )
-    );
-
-    const socket =
-      new WebSocket(presenceUrl);
-
-    presenceWebsocketRef.current =
-      socket;
-
-    socket.onopen = () => {
-      console.log(
-        "Presence WebSocket connected."
-      );
-
-      if (
-        presenceWebsocketRef.current ===
-        socket
-      ) {
-        setPresenceConnected(true);
-      }
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const data =
-          JSON.parse(event.data);
-
-        console.log(
-          "Presence WebSocket message:",
-          data
+  const connectPresenceWebSocket =
+    () => {
+      const accessToken =
+        localStorage.getItem(
+          "access_token"
         );
 
-        // =====================================================
-        // PRESENCE
-        // =====================================================
+      if (!accessToken) {
+        console.error(
+          "Access token not found for presence."
+        );
+
+        return;
+      }
+
+      if (!WS_BASE_URL) {
+        console.error(
+          "VITE_WS_BASE_URL is not configured."
+        );
+
+        return;
+      }
+
+      if (
+        presenceWebsocketRef.current
+      ) {
+        presenceWebsocketRef.current.close();
+
+        presenceWebsocketRef.current =
+          null;
+      }
+
+      setPresenceConnected(
+        false
+      );
+
+      const presenceUrl =
+        `${WS_BASE_URL}/ws/presence/?token=${encodeURIComponent(
+          accessToken
+        )}`;
+
+      console.log(
+        "Connecting Presence WebSocket:",
+        presenceUrl.replace(
+          accessToken,
+          "ACCESS_TOKEN"
+        )
+      );
+
+      const socket =
+        new WebSocket(
+          presenceUrl
+        );
+
+      presenceWebsocketRef.current =
+        socket;
+
+      socket.onopen = () => {
+        console.log(
+          "Presence WebSocket connected."
+        );
 
         if (
-          data.type === "presence" &&
-          data.data
+          presenceWebsocketRef.current ===
+          socket
         ) {
-          const userId =
-            String(data.data.user_id);
-
-          const isOnline =
-            data.data.status ===
-            "online";
-
-          setConversations(
-            (previousConversations) =>
-              previousConversations.map(
-                (conversation) => ({
-                  ...conversation,
-
-                  members:
-                    conversation.members?.map(
-                      (member) => {
-                        if (
-                          String(
-                            member.user?.id
-                          ) === userId
-                        ) {
-                          return {
-                            ...member,
-
-                            user: {
-                              ...member.user,
-
-                              is_online:
-                                isOnline,
-
-                              last_seen:
-                                data.data
-                                  .last_seen,
-                            },
-                          };
-                        }
-
-                        return member;
-                      }
-                    ),
-                })
-              )
+          setPresenceConnected(
+            true
           );
-
-          return;
         }
+      };
 
-        // =====================================================
-        // CONVERSATION UPDATE
-        // =====================================================
-
-        if (
-          data.type ===
-            "conversation_update" &&
-          data.data
-        ) {
-          const update =
-            data.data;
-
-          const conversationId =
-            String(
-              update.conversation_id
+      socket.onmessage = (
+        event
+      ) => {
+        try {
+          const data =
+            JSON.parse(
+              event.data
             );
 
           console.log(
-            "Conversation update received:",
-            update
+            "Presence WebSocket message:",
+            data
           );
 
-          setConversations(
-            (previousConversations) =>
-              previousConversations.map(
-                (conversation) => {
-                  if (
-                    String(
-                      conversation.id
-                    ) !==
-                    conversationId
-                  ) {
-                    return conversation;
-                  }
+          // =================================================
+          // PRESENCE
+          // =================================================
 
-                  return {
+          if (
+            data.type ===
+              "presence" &&
+            data.data
+          ) {
+            const userId =
+              String(
+                data.data.user_id
+              );
+
+            const isOnline =
+              data.data.status ===
+              "online";
+
+            setConversations(
+              (previousConversations) =>
+                previousConversations.map(
+                  (
+                    conversation
+                  ) => ({
                     ...conversation,
 
-                    unread_count:
-                      update.unread_count ??
-                      conversation.unread_count ??
-                      0,
-
-                    last_read_at:
-                      update.last_read_at ??
-                      conversation.last_read_at,
-
-                    last_message:
-                      update.last_message ??
-                      conversation.last_message,
-
-                    updated_at:
-                      update.updated_at ??
-                      conversation.updated_at,
-
                     members:
-                      update.members ??
-                      conversation.members,
-                  };
-                }
-              )
+                      conversation.members?.map(
+                        (
+                          member
+                        ) => {
+                          if (
+                            String(
+                              member.user?.id
+                            ) ===
+                            userId
+                          ) {
+                            return {
+                              ...member,
+
+                              user: {
+                                ...member.user,
+
+                                is_online:
+                                  isOnline,
+
+                                last_seen:
+                                  data.data
+                                    .last_seen,
+                              },
+                            };
+                          }
+
+                          return member;
+                        }
+                      ),
+                  })
+                )
+            );
+
+            return;
+          }
+
+          // =================================================
+          // CONVERSATION UPDATE
+          // =================================================
+
+          if (
+            data.type ===
+              "conversation_update" &&
+            data.data
+          ) {
+            const update =
+              data.data;
+
+            const conversationId =
+              String(
+                update.conversation_id
+              );
+
+            console.log(
+              "Conversation update received:",
+              update
+            );
+
+            setConversations(
+              (
+                previousConversations
+              ) =>
+                previousConversations.map(
+                  (
+                    conversation
+                  ) => {
+                    if (
+                      String(
+                        conversation.id
+                      ) !==
+                      conversationId
+                    ) {
+                      return conversation;
+                    }
+
+                    return {
+                      ...conversation,
+
+                      unread_count:
+                        update.unread_count ??
+                        conversation.unread_count ??
+                        0,
+
+                      last_read_at:
+                        update.last_read_at ??
+                        conversation.last_read_at,
+
+                      last_message:
+                        update.last_message ??
+                        conversation.last_message,
+
+                      updated_at:
+                        update.updated_at ??
+                        conversation.updated_at,
+
+                      members:
+                        update.members ??
+                        conversation.members,
+                    };
+                  }
+                )
+            );
+
+            return;
+          }
+
+        } catch (error) {
+          console.error(
+            "Invalid presence WebSocket message:",
+            event.data,
+            error
           );
-
-          return;
         }
+      };
 
-      } catch (error) {
+      socket.onerror = (
+        error
+      ) => {
         console.error(
-          "Invalid presence WebSocket message:",
-          event.data,
+          "Presence WebSocket error:",
           error
         );
-      }
+
+        if (
+          presenceWebsocketRef.current ===
+          socket
+        ) {
+          setPresenceConnected(
+            false
+          );
+        }
+      };
+
+      socket.onclose = (
+        event
+      ) => {
+        console.log(
+          "Presence WebSocket disconnected:",
+          event.code,
+          event.reason
+        );
+
+        if (
+          presenceWebsocketRef.current ===
+          socket
+        ) {
+          presenceWebsocketRef.current =
+            null;
+
+          setPresenceConnected(
+            false
+          );
+        }
+      };
     };
-
-    socket.onerror = (error) => {
-      console.error(
-        "Presence WebSocket error:",
-        error
-      );
-
-      if (
-        presenceWebsocketRef.current ===
-        socket
-      ) {
-        setPresenceConnected(false);
-      }
-    };
-
-    socket.onclose = (event) => {
-      console.log(
-        "Presence WebSocket disconnected:",
-        event.code,
-        event.reason
-      );
-
-      if (
-        presenceWebsocketRef.current ===
-        socket
-      ) {
-        presenceWebsocketRef.current = null;
-        setPresenceConnected(false);
-      }
-    };
-  };
 
   // =========================================================
   // PRESENCE EFFECT
@@ -1021,12 +1131,15 @@ function Chat() {
           null;
       }
 
-      if (typingTimeoutRef.current) {
+      if (
+        typingTimeoutRef.current
+      ) {
         clearTimeout(
           typingTimeoutRef.current
         );
 
-        typingTimeoutRef.current = null;
+        typingTimeoutRef.current =
+          null;
       }
     };
 
@@ -1039,8 +1152,13 @@ function Chat() {
   const loadConversations =
     async () => {
       try {
-        setLoadingConversations(true);
-        setConversationError("");
+        setLoadingConversations(
+          true
+        );
+
+        setConversationError(
+          ""
+        );
 
         const response =
           await getConversations();
@@ -1050,7 +1168,9 @@ function Chat() {
           response
         );
 
-        if (Array.isArray(response)) {
+        if (
+          Array.isArray(response)
+        ) {
           setConversations(
             response
           );
@@ -1195,17 +1315,90 @@ function Chat() {
   // LOAD UNCHATTED USERS
   // =========================================================
 
-  const loadUnchattedUsers = async (
-    query = ""
-  ) => {
+  const loadUnchattedUsers =
+    async (
+      query = ""
+    ) => {
+      const requestId =
+        ++userSearchRequestRef.current;
+
+      try {
+        setUserSearchLoading(
+          true
+        );
+
+        const response =
+          await searchUsers(
+            query
+          );
+
+        if (
+          requestId !==
+          userSearchRequestRef.current
+        ) {
+          return;
+        }
+
+        console.log(
+          "Unchatted users response:",
+          response
+        );
+
+        if (
+          Array.isArray(response)
+        ) {
+          setUserSearchResults(
+            response
+          );
+
+        } else {
+          setUserSearchResults(
+            []
+          );
+        }
+
+      } catch (error) {
+
+        if (
+          requestId !==
+          userSearchRequestRef.current
+        ) {
+          return;
+        }
+
+        console.error(
+          "Failed to load unchatted users:",
+          error
+        );
+
+        setUserSearchResults(
+          []
+        );
+
+      } finally {
+
+        if (
+          requestId ===
+          userSearchRequestRef.current
+        ) {
+          setUserSearchLoading(
+            false
+          );
+        }
+      }
+    };
+  // =========================================================
+  // LOAD USERS FOR GROUP CREATION
+  // =========================================================
+
+  const loadGroupUsers = async (query = "") => {
     const requestId =
       ++userSearchRequestRef.current;
 
     try {
-      setUserSearchLoading(true);
+      setGroupUsersLoading(true);
 
-      const response =
-        await searchUsers(query);
+      const response = await listUsers();
 
       if (
         requestId !==
@@ -1215,58 +1408,80 @@ function Chat() {
       }
 
       console.log(
-        "Unchatted users response:",
-        response
+        "Group users API response:",
+        response.data
       );
 
+      let users = [];
+
       if (Array.isArray(response)) {
-        setUserSearchResults(response);
-      } else {
-        setUserSearchResults([]);
+        users = response;
+      } else if (
+        Array.isArray(response?.data)
+      ) {
+        users = response.data;
+      } else if (
+        Array.isArray(response?.results)
+      ) {
+        users = response.results;
       }
+
+      // Remove current logged-in user
+      users = users.filter(
+        (item) =>
+          String(item.id) !==
+          String(user?.id)
+      );
+
+      setGroupUsers(users);
 
     } catch (error) {
-
-      if (
-        requestId !==
-        userSearchRequestRef.current
-      ) {
-        return;
-      }
-
       console.error(
-        "Failed to load unchatted users:",
+        "Failed to load group users:",
         error
       );
 
-      setUserSearchResults([]);
+      console.error(
+        "Response:",
+        error.response?.data
+      );
+
+      setGroupUsers([]);
 
     } finally {
-
       if (
         requestId ===
         userSearchRequestRef.current
       ) {
-        setUserSearchLoading(false);
+        setGroupUsersLoading(false);
       }
     }
   };
-
 
   // =========================================================
   // SEARCH UNCHATTED USERS
   // =========================================================
 
   const handleUserSearch =
-    async (value) => {
-
-      setUserSearch(value);
+    async (
+      value
+    ) => {
+      setUserSearch(
+        value
+      );
 
       await loadUnchattedUsers(
         value.trim()
       );
     };
 
+  // =========================================================
+  // SEARCH USERS FOR GROUP
+  // =========================================================
+
+  const handleGroupUserSearch = (value) => {
+    setUserSearch(value);
+  };
 
   // =========================================================
   // OPEN START CONVERSATION
@@ -1274,18 +1489,34 @@ function Chat() {
 
   const openStartConversation =
     async () => {
+      setShowStartConversation(
+        true
+      );
 
-      setShowStartConversation(true);
+      setShowCreateGroup(
+        false
+      );
+
+      setGroupName("");
+
+      setSelectedGroupMembers(
+        []
+      );
 
       setUserSearch("");
 
-      setUserSearchResults([]);
+      setUserSearchResults(
+        []
+      );
 
-      setUserSearchLoading(true);
+      setUserSearchLoading(
+        true
+      );
 
-      await loadUnchattedUsers("");
+      await loadUnchattedUsers(
+        ""
+      );
     };
-
 
   // =========================================================
   // CLOSE START CONVERSATION
@@ -1293,16 +1524,259 @@ function Chat() {
 
   const closeStartConversation =
     () => {
+      userSearchRequestRef.current +=
+        1;
 
-      userSearchRequestRef.current += 1;
+      setShowStartConversation(
+        false
+      );
 
-      setShowStartConversation(false);
+      setShowCreateGroup(
+        false
+      );
 
       setUserSearch("");
 
-      setUserSearchResults([]);
+      setUserSearchResults(
+        []
+      );
 
-      setUserSearchLoading(false);
+      setUserSearchLoading(
+        false
+      );
+
+      setGroupName("");
+
+      setSelectedGroupMembers(
+        []
+      );
+
+      setCreatingGroup(
+        false
+      );
+    };
+
+  // =========================================================
+  // OPEN CREATE GROUP
+  // =========================================================
+
+  const openCreateGroup = async () => {
+    setShowCreateGroup(true);
+
+    setGroupName("");
+
+    setSelectedGroupMembers([]);
+
+    setUserSearch("");
+
+    setGroupUsers([]);
+
+    setGroupUsersLoading(true);
+
+    await loadGroupUsers();
+  };
+
+  // =========================================================
+  // BACK FROM CREATE GROUP
+  // =========================================================
+
+  const backFromCreateGroup = () => {
+    userSearchRequestRef.current += 1;
+
+    setShowCreateGroup(false);
+
+    setGroupName("");
+
+    setSelectedGroupMembers([]);
+
+    setUserSearch("");
+
+    setGroupUsers([]);
+
+    setGroupUsersLoading(false);
+  };
+
+  // =========================================================
+  // TOGGLE GROUP MEMBER
+  // =========================================================
+
+  const toggleGroupMember =(userId) => {
+      const numericUserId = Number(userId);
+
+      setSelectedGroupMembers(
+        (previous) => {
+          const alreadySelected =
+            previous.some(
+              (id) =>
+                Number(id) === numericUserId);
+
+          if (
+            alreadySelected
+          ) {
+            return previous.filter(
+              (id) =>
+                Number(id) !==
+                numericUserId
+            );
+          }
+
+          return [
+            ...previous,
+            numericUserId,
+          ];
+        }
+      );
+    };
+
+  // =========================================================
+  // CREATE GROUP
+  // =========================================================
+
+  const handleCreateGroup =
+    async () => {
+      const trimmedName =
+        groupName.trim();
+
+      if (!trimmedName) {
+        alert(
+          "Please enter a group name."
+        );
+
+        return;
+      }
+
+      if (
+        selectedGroupMembers.length === 0 ) {
+        alert(
+          "Please select at least one member."
+        );
+
+        return;
+      }
+
+      try {
+        setCreatingGroup(true);
+
+        console.log(
+          "Creating group:",
+          {
+            name: trimmedName,
+            member_ids:
+              selectedGroupMembers,
+          }
+        );
+
+        const response =
+          await createGroupConversation(
+            trimmedName,
+            selectedGroupMembers
+          );
+
+        console.log(
+          "Create group API response:",
+          response
+        );
+
+        const createdGroup =
+          response?.conversation ||
+          response?.data ||
+          response;
+
+        if (
+          !createdGroup?.id
+        ) {
+          console.error(
+            "Invalid group response:",
+            response
+          );
+
+          throw new Error(
+            "Invalid group response from server."
+          );
+        }
+
+        // =====================================================
+        // ADD GROUP TO CONVERSATION LIST
+        // =====================================================
+
+        setConversations(
+          (previousConversations) => {
+            const exists =
+              previousConversations.some(
+                (conversation) =>
+                  String(
+                    conversation.id
+                  ) ===
+                  String(
+                    createdGroup.id
+                  )
+              );
+
+            if (exists) {
+              return previousConversations.map(
+                (conversation) =>
+                  String(
+                    conversation.id
+                  ) ===
+                  String(
+                    createdGroup.id
+                  )
+                    ? createdGroup
+                    : conversation
+              );
+            }
+
+            return [
+              createdGroup,
+              ...previousConversations,
+            ];
+          }
+        );
+
+        // =====================================================
+        // RESET GROUP FORM
+        // =====================================================
+
+        setGroupName("");
+
+        setSelectedGroupMembers([]);
+
+        setUserSearch("");
+
+        setGroupUsers([]);
+
+        setShowCreateGroup(false);
+
+        setShowStartConversation(false);
+
+        // =====================================================
+        // OPEN CREATED GROUP
+        // =====================================================
+
+        await handleConversationClick(
+          createdGroup
+        );
+
+      } catch (error) {
+        console.error(
+          "Failed to create group:",
+          error
+        );
+
+        console.error(
+          "Response:",
+          error.response?.data
+        );
+
+        alert(
+          error.response?.data?.detail ||
+          error.response?.data?.message ||
+          "Unable to create group."
+        );
+
+      } finally {
+        setCreatingGroup(false);
+      }
     };
 
   // =========================================================
@@ -1310,7 +1784,9 @@ function Chat() {
   // =========================================================
 
   const handleUserClick =
-    async (selectedUser) => {
+    async (
+      selectedUser
+    ) => {
       try {
         setMessageError("");
 
@@ -1343,11 +1819,15 @@ function Chat() {
         }
 
         setConversations(
-          (previousConversations) => {
+          (
+            previousConversations
+          ) => {
             const exists =
               previousConversations.some(
                 (item) =>
-                  String(item.id) ===
+                  String(
+                    item.id
+                  ) ===
                   String(
                     conversation.id
                   )
@@ -1356,7 +1836,9 @@ function Chat() {
             if (exists) {
               return previousConversations.map(
                 (item) =>
-                  String(item.id) ===
+                  String(
+                    item.id
+                  ) ===
                   String(
                     conversation.id
                   )
@@ -1374,11 +1856,17 @@ function Chat() {
 
         setUserSearch("");
 
-        setUserSearchResults([]);
+        setUserSearchResults(
+          []
+        );
 
-        setUserSearchLoading(false);
+        setUserSearchLoading(
+          false
+        );
 
-        setShowStartConversation(false);
+        setShowStartConversation(
+          false
+        );
 
         await handleConversationClick(
           conversation
@@ -1410,7 +1898,9 @@ function Chat() {
   // =========================================================
 
   const searchMessages =
-    async (searchText) => {
+    async (
+      searchText
+    ) => {
       const query =
         searchText.trim();
 
@@ -1419,8 +1909,13 @@ function Chat() {
       }
 
       if (!query) {
-        setMessageSearchResults([]);
-        setMessageSearchError("");
+        setMessageSearchResults(
+          []
+        );
+
+        setMessageSearchError(
+          ""
+        );
 
         return;
       }
@@ -1430,7 +1925,9 @@ function Chat() {
           true
         );
 
-        setMessageSearchError("");
+        setMessageSearchError(
+          ""
+        );
 
         console.log(
           "Searching messages:",
@@ -1467,7 +1964,8 @@ function Chat() {
             data?.data
           )
         ) {
-          results = data.data;
+          results =
+            data.data;
 
         } else if (
           Array.isArray(
@@ -1493,7 +1991,9 @@ function Chat() {
           error.response?.data
         );
 
-        setMessageSearchResults([]);
+        setMessageSearchResults(
+          []
+        );
 
         setMessageSearchError(
           error.response?.data?.detail ||
@@ -1516,9 +2016,13 @@ function Chat() {
       const value =
         event.target.value;
 
-      setMessageSearch(value);
+      setMessageSearch(
+        value
+      );
 
-      searchMessages(value);
+      searchMessages(
+        value
+      );
     };
 
   // =========================================================
@@ -1535,10 +2039,13 @@ function Chat() {
       if (messageElement) {
         messageElement.scrollIntoView(
           {
-            behavior: "smooth",
-            block: "center",
+            behavior:
+              "smooth",
+            block:
+              "center",
           }
         );
+
       } else {
         console.log(
           "Message is not currently loaded:",
@@ -1632,7 +2139,9 @@ function Chat() {
           );
 
         olderMessages =
-          [...olderMessages].reverse();
+          [
+            ...olderMessages,
+          ].reverse();
 
         setMessages(
           (previousMessages) => {
@@ -1678,7 +2187,9 @@ function Chat() {
         );
 
         setHasMoreMessages(
-          Boolean(nextCursor)
+          Boolean(
+            nextCursor
+          )
         );
 
       } catch (error) {
@@ -1729,14 +2240,19 @@ function Chat() {
   // =========================================================
 
   const handleConversationClick =
-    async (conversation) => {
+    async (
+      conversation
+    ) => {
 
       if (websocketRef.current) {
         websocketRef.current.close();
-        websocketRef.current = null;
+        websocketRef.current =
+          null;
       }
 
-      setSocketConnected(false);
+      setSocketConnected(
+        false
+      );
 
       setSelectedConversation(
         conversation
@@ -1747,15 +2263,23 @@ function Chat() {
       );
 
       setMessageSearch("");
-      setMessageSearchResults([]);
-      setMessageSearchError("");
+
+      setMessageSearchResults(
+        []
+      );
+
+      setMessageSearchError(
+        ""
+      );
 
       setConversations(
         (previousConversations) =>
           previousConversations.map(
             (item) => {
               if (
-                String(item.id) !==
+                String(
+                  item.id
+                ) !==
                 String(
                   conversation.id
                 )
@@ -1785,9 +2309,13 @@ function Chat() {
         )
       );
 
-      setTypingUserId(null);
+      setTypingUserId(
+        null
+      );
 
-      if (typingTimeoutRef.current) {
+      if (
+        typingTimeoutRef.current
+      ) {
         clearTimeout(
           typingTimeoutRef.current
         );
@@ -1891,10 +2419,13 @@ function Chat() {
         );
 
         if (
-          loadedMessages.length > 1
+          loadedMessages.length >
+          1
         ) {
           loadedMessages =
-            [...loadedMessages].reverse();
+            [
+              ...loadedMessages,
+            ].reverse();
         }
 
         setMessages(
@@ -1906,7 +2437,9 @@ function Chat() {
         );
 
         setHasMoreMessages(
-          Boolean(nextCursor)
+          Boolean(
+            nextCursor
+          )
         );
 
         connectWebSocket(
@@ -1941,7 +2474,9 @@ function Chat() {
   // =========================================================
 
   const sendTypingStatus =
-    (isTyping) => {
+    (
+      isTyping
+    ) => {
       const socket =
         websocketRef.current;
 
@@ -1956,8 +2491,10 @@ function Chat() {
       try {
         socket.send(
           JSON.stringify({
-            action: "typing",
-            is_typing: isTyping,
+            action:
+              "typing",
+            is_typing:
+              isTyping,
           })
         );
 
@@ -1979,7 +2516,9 @@ function Chat() {
   // =========================================================
 
   const sendReadReceipt =
-    (messageId) => {
+    (
+      messageId
+    ) => {
       const socket =
         websocketRef.current;
 
@@ -1994,8 +2533,10 @@ function Chat() {
       try {
         socket.send(
           JSON.stringify({
-            action: "read",
-            message_id: messageId,
+            action:
+              "read",
+            message_id:
+              messageId,
           })
         );
 
@@ -2088,8 +2629,10 @@ function Chat() {
         }
 
         const payload = {
-          action: "message",
-          message: content,
+          action:
+            "message",
+          message:
+            content,
         };
 
         console.log(
@@ -2098,7 +2641,9 @@ function Chat() {
         );
 
         socket.send(
-          JSON.stringify(payload)
+          JSON.stringify(
+            payload
+          )
         );
 
         setMessageText("");
@@ -2125,11 +2670,15 @@ function Chat() {
   // =========================================================
 
   const handleMessageInputChange =
-    (event) => {
+    (
+      event
+    ) => {
       const value =
         event.target.value;
 
-      setMessageText(value);
+      setMessageText(
+        value
+      );
 
       if (!value.trim()) {
         if (
@@ -2163,9 +2712,12 @@ function Chat() {
   // =========================================================
 
   const handleMessageKeyDown =
-    (event) => {
+    (
+      event
+    ) => {
       if (
-        event.key === "Enter" &&
+        event.key ===
+          "Enter" &&
         !event.shiftKey
       ) {
         event.preventDefault();
@@ -2207,7 +2759,9 @@ function Chat() {
       pendingScrollRestoreRef.current =
         null;
 
-      setTypingUserId(null);
+      setTypingUserId(
+        null
+      );
 
       setSocketConnected(
         false
@@ -2229,9 +2783,13 @@ function Chat() {
 
       setMessageSearch("");
 
-      setMessageSearchResults([]);
+      setMessageSearchResults(
+        []
+      );
 
-      setMessageSearchError("");
+      setMessageSearchError(
+        ""
+      );
 
       setNextMessageCursor(
         null
@@ -2245,7 +2803,9 @@ function Chat() {
         false
       );
 
-      setOtherUserOnline(false);
+      setOtherUserOnline(
+        false
+      );
     };
 
   // =========================================================
@@ -2265,6 +2825,20 @@ function Chat() {
         );
       }
     );
+    
+  const filteredGroupUsers =
+    groupUsers.filter((person) => {
+      const username =
+        person.username ||
+        person.email ||
+        "";
+
+      return username
+        .toLowerCase()
+        .includes(
+          userSearch.toLowerCase()
+        );
+    });
 
   // =========================================================
   // SELECTED USER
@@ -2276,6 +2850,40 @@ function Chat() {
           selectedConversation
         )
       : null;
+
+  // =========================================================
+  // GET GROUP MESSAGE SENDER
+  // =========================================================
+
+  const getGroupMessageSender =
+    (
+      message
+    ) => {
+      const senderId =
+        message.sender?.id ??
+        message.sender_id;
+
+      if (!senderId) {
+        return null;
+      }
+
+      const member =
+        selectedConversation?.members?.find(
+          (member) =>
+            String(
+              member.user?.id
+            ) ===
+            String(
+              senderId
+            )
+        );
+
+      return (
+        member?.user ||
+        message.sender ||
+        null
+      );
+    };
 
   // =========================================================
   // RENDER
@@ -2309,10 +2917,14 @@ function Chat() {
           </div>
 
           <button
-            onClick={logout}
+            onClick={
+              logout
+            }
             title="Logout"
           >
-            <LogOut size={20} />
+            <LogOut
+              size={20}
+            />
           </button>
 
         </div>
@@ -2324,146 +2936,522 @@ function Chat() {
         {showStartConversation ? (
 
           /* =====================================================
-            START CONVERSATION SCREEN
+             START CONVERSATION SCREEN
           ===================================================== */
 
           <div className="start-conversation-container">
 
-            {/* HEADER */}
+            {/* =================================================
+                CREATE GROUP SCREEN
+            ================================================= */}
 
-            <div className="start-conversation-header">
+            {showCreateGroup ? (
 
-              <button
-                className="start-conversation-back"
-                onClick={
-                  closeStartConversation
-                }
-                title="Back"
-              >
-                <ArrowLeft size={20} />
-              </button>
+              <div className="create-group-container">
 
-              <div>
-                <h3>
-                  Start Conversation
-                </h3>
+                {/* =================================================
+                    HEADER
+                ================================================= */}
 
-                <span>
-                  Select a person to chat
-                </span>
-              </div>
+                <div className="start-conversation-header">
 
-            </div>
+                  <button
+                    className="start-conversation-back"
+                    onClick={backFromCreateGroup}
+                    title="Back"
+                  >
+                    <ArrowLeft size={20} />
+                  </button>
 
+                  <div>
+                    <h3>
+                      Create Group
+                    </h3>
 
-            {/* SEARCH */}
+                    <span>
+                      Add members to your group
+                    </span>
+                  </div>
 
-            <div className="search-box">
-
-              <Search size={18} />
-
-              <input
-                type="text"
-                placeholder="Search people"
-                value={userSearch}
-                onChange={(event) =>
-                  handleUserSearch(
-                    event.target.value
-                  )
-                }
-                autoFocus
-              />
-
-            </div>
-
-
-            {/* USER LIST */}
-
-            <div className="conversation-list">
-
-              {userSearchLoading && (
-                <div className="search-status">
-                  Loading people...
                 </div>
-              )}
 
 
-              {!userSearchLoading &&
-                userSearchResults.length === 0 && (
-                  <div className="empty-chat">
+                {/* =================================================
+                    GROUP NAME
+                ================================================= */}
 
-                    <MessageCircle
-                      size={40}
-                    />
+                <div className="group-name-section">
 
-                    <p>
-                      {userSearch.trim()
-                        ? "No people found"
-                        : "No new people available"}
-                    </p>
+                  <input
+                    type="text"
+                    placeholder="Enter group name"
+                    value={groupName}
+                    onChange={(event) =>
+                      setGroupName(
+                        event.target.value
+                      )
+                    }
+                    maxLength={255}
+                    disabled={creatingGroup}
+                  />
+
+                </div>
+
+
+                {/* =================================================
+                    SELECTED MEMBERS COUNT
+                ================================================= */}
+
+                <div className="selected-group-count">
+
+                  <Users size={18} />
+
+                  <span>
+                    {selectedGroupMembers.length}{" "}
+                    member
+                    {selectedGroupMembers.length !== 1
+                      ? "s"
+                      : ""}{" "}
+                    selected
+                  </span>
+
+                </div>
+
+
+                {/* =================================================
+                    SELECTED MEMBER CHIPS
+                ================================================= */}
+
+                {selectedGroupMembers.length > 0 && (
+
+                  <div className="selected-group-members">
+
+                    <div className="selected-members-list">
+
+                      {selectedGroupMembers.map(
+                        (memberId) => {
+
+                          const member =
+                            groupUsers.find(
+                              (person) =>
+                                String(
+                                  person.id
+                                ) ===
+                                String(
+                                  memberId
+                                )
+                            );
+
+                          return (
+
+                            <div
+                              key={memberId}
+                              className="selected-member-chip"
+                            >
+
+                              <span>
+                                {member?.username ||
+                                  member?.email ||
+                                  `User ${memberId}`}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleGroupMember(
+                                    memberId
+                                  )
+                                }
+                                disabled={
+                                  creatingGroup
+                                }
+                              >
+                                ×
+                              </button>
+
+                            </div>
+
+                          );
+                        }
+                      )}
+
+                    </div>
 
                   </div>
                 )}
 
 
-              {!userSearchLoading &&
-                userSearchResults.length > 0 &&
-                userSearchResults.map(
-                  (searchUser) => {
+                {/* =================================================
+                    SEARCH USERS
+                ================================================= */}
 
-                    const username =
-                      searchUser.username ||
-                      "Unknown User";
+                <div className="search-box">
 
-                    return (
-                      <div
-                        key={searchUser.id}
-                        className="user-search-item"
-                        onClick={() =>
-                          handleUserClick(
-                            searchUser
-                          )
-                        }
-                      >
+                  <Search size={18} />
 
-                        {/* AVATAR */}
+                  <input
+                    type="text"
+                    placeholder="Search people..."
+                    value={userSearch}
+                    onChange={(event) =>
+                      handleGroupUserSearch(
+                        event.target.value
+                      )
+                    }
+                    autoFocus
+                    disabled={creatingGroup}
+                  />
 
-                        <div className="avatar">
-                          {username
-                            .charAt(0)
-                            .toUpperCase()}
-                        </div>
+                </div>
 
 
-                        {/* USER INFO */}
+                {/* =================================================
+                    USER LIST
+                ================================================= */}
 
-                        <div className="user-search-info">
+                <div className="conversation-list">
 
-                          <strong>
-                            {username}
-                          </strong>
+                  {groupUsersLoading && (
 
-                          <span>
-                            {searchUser.is_online
-                              ? "online"
-                              : "offline"}
-                          </span>
+                    <div className="search-status">
 
-                        </div>
+                      Loading people...
 
-                      </div>
-                    );
+                    </div>
+
+                  )}
+
+
+                  {!groupUsersLoading &&
+                    groupUsers.length === 0 && (
+
+                    <div className="empty-chat">
+
+                      <Users size={40} />
+
+                      <p>
+                        {userSearch.trim()
+                          ? "No people found"
+                          : "No people available"}
+                      </p>
+
+                    </div>
+
+                  )}
+
+
+                  {!groupUsersLoading &&
+                    groupUsers.length > 0 &&
+                    filteredGroupUsers.map(
+                      (searchUser) => {
+
+                        const username =
+                          searchUser.username ||
+                          searchUser.email ||
+                          "Unknown User";
+
+                        const isSelected =
+                          selectedGroupMembers.some(
+                            (id) =>
+                              String(id) ===
+                              String(
+                                searchUser.id
+                              )
+                          );
+
+                        return (
+
+                          <div
+                            key={
+                              searchUser.id
+                            }
+                            className={`user-search-item ${
+                              isSelected
+                                ? "selected"
+                                : ""
+                            }`}
+                            onClick={() =>
+                              toggleGroupMember(
+                                searchUser.id
+                              )
+                            }
+                          >
+
+                            {/* AVATAR */}
+
+                            <div className="avatar">
+
+                              {username
+                                .charAt(0)
+                                .toUpperCase()}
+
+                            </div>
+
+
+                            {/* USER INFO */}
+
+                            <div className="user-search-info">
+
+                              <strong>
+                                {username}
+                              </strong>
+
+                              <span>
+                                {searchUser.is_online
+                                  ? "online"
+                                  : "offline"}
+                              </span>
+
+                            </div>
+
+
+                            {/* CHECKBOX */}
+
+                            <input
+                              type="checkbox"
+                              checked={
+                                isSelected
+                              }
+                              onChange={() =>
+                                toggleGroupMember(
+                                  searchUser.id
+                                )
+                              }
+                              onClick={(event) =>
+                                event.stopPropagation()
+                              }
+                              disabled={
+                                creatingGroup
+                              }
+                            />
+
+                          </div>
+
+                        );
+                      }
+                    )}
+
+                </div>
+
+
+                {/* =================================================
+                    CREATE GROUP BUTTON
+                ================================================= */}
+
+                <div className="create-group-footer">
+
+                  <button
+                    type="button"
+                    className="create-group-submit-button"
+                    onClick={
+                      handleCreateGroup
+                    }
+                    disabled={
+                      creatingGroup ||
+                      !groupName.trim() ||
+                      selectedGroupMembers.length === 0
+                    }
+                  >
+
+                    {creatingGroup ? (
+
+                      "Creating..."
+
+                    ) : (
+
+                      <>
+                        <Users size={18} />
+
+                        <span>
+                          Create Group
+                        </span>
+                      </>
+
+                    )}
+
+                  </button>
+
+                </div>
+
+              </div>
+
+            ) : (
+
+              /* =================================================
+                 NORMAL START CONVERSATION SCREEN
+              ================================================= */
+
+              <>
+
+                {/* HEADER */}
+
+                <div className="start-conversation-header">
+
+                  <button
+                    className="start-conversation-back"
+                    onClick={
+                      closeStartConversation
+                    }
+                    title="Back"
+                  >
+                    <ArrowLeft
+                      size={20}
+                    />
+                  </button>
+
+                  <div>
+                    <h3>
+                      Start Conversation
+                    </h3>
+
+                    <span>
+                      Select a person to chat
+                    </span>
+                  </div>
+
+                </div>
+
+                {/* CREATE GROUP BUTTON */}
+
+                <button
+                  className="create-group-button"
+                  onClick={
+                    openCreateGroup
                   }
-                )}
+                >
+                  <Users
+                    size={18}
+                  />
 
-            </div>
+                  <span>
+                    Create Group
+                  </span>
+                </button>
+
+                {/* SEARCH */}
+
+                <div className="search-box">
+
+                  <Search
+                    size={18}
+                  />
+
+                  <input
+                    type="text"
+                    placeholder="Search people"
+                    value={
+                      userSearch
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      handleUserSearch(
+                        event.target.value
+                      )
+                    }
+                    autoFocus
+                  />
+
+                </div>
+
+                {/* USER LIST */}
+
+                <div className="conversation-list">
+
+                  {userSearchLoading && (
+                    <div className="search-status">
+                      Loading people...
+                    </div>
+                  )}
+
+                  {!userSearchLoading &&
+                    userSearchResults.length ===
+                      0 && (
+
+                    <div className="empty-chat">
+
+                      <MessageCircle
+                        size={40}
+                      />
+
+                      <p>
+                        {userSearch.trim()
+                          ? "No people found"
+                          : "No new people available"}
+                      </p>
+
+                    </div>
+                  )}
+
+                  {!userSearchLoading &&
+                    userSearchResults.length >
+                      0 &&
+                    userSearchResults.map(
+                      (
+                        searchUser
+                      ) => {
+
+                        const username =
+                          searchUser.username ||
+                          "Unknown User";
+
+                        return (
+                          <div
+                            key={
+                              searchUser.id
+                            }
+                            className="user-search-item"
+                            onClick={() =>
+                              handleUserClick(
+                                searchUser
+                              )
+                            }
+                          >
+
+                            {/* AVATAR */}
+
+                            <div className="avatar">
+
+                              {username
+                                .charAt(
+                                  0
+                                )
+                                .toUpperCase()}
+
+                            </div>
+
+                            {/* USER INFO */}
+
+                            <div className="user-search-info">
+
+                              <strong>
+                                {username}
+                              </strong>
+
+                              <span>
+                                {searchUser.is_online
+                                  ? "online"
+                                  : "offline"}
+                              </span>
+
+                            </div>
+
+                          </div>
+                        );
+                      }
+                    )}
+
+                </div>
+
+              </>
+            )}
 
           </div>
 
         ) : (
 
           /* =====================================================
-            NORMAL CHATS SCREEN
+             NORMAL CHATS SCREEN
           ===================================================== */
 
           <>
@@ -2477,7 +3465,9 @@ function Chat() {
               }
             >
 
-              <Plus size={18} />
+              <Plus
+                size={18}
+              />
 
               <span>
                 Start Conversation
@@ -2485,18 +3475,23 @@ function Chat() {
 
             </button>
 
-
             {/* CHAT SEARCH */}
 
             <div className="search-box">
 
-              <Search size={18} />
+              <Search
+                size={18}
+              />
 
               <input
                 type="text"
                 placeholder="Search chats"
-                value={search}
-                onChange={(event) =>
+                value={
+                  search
+                }
+                onChange={(
+                  event
+                ) =>
                   setSearch(
                     event.target.value
                   )
@@ -2504,7 +3499,6 @@ function Chat() {
               />
 
             </div>
-
 
             {/* CONVERSATION LIST */}
 
@@ -2516,13 +3510,11 @@ function Chat() {
                 </div>
               )}
 
-
               {conversationError && (
                 <div className="chat-error">
                   {conversationError}
                 </div>
               )}
-
 
               {!loadingConversations &&
                 !conversationError &&
@@ -2542,10 +3534,11 @@ function Chat() {
                 </div>
               )}
 
-
               {!loadingConversations &&
                 filteredConversations.map(
-                  (conversation) => {
+                  (
+                    conversation
+                  ) => {
 
                     const conversationName =
                       getConversationName(
@@ -2582,11 +3575,12 @@ function Chat() {
                         <div className="avatar">
 
                           {conversationName
-                            .charAt(0)
+                            .charAt(
+                              0
+                            )
                             .toUpperCase()}
 
                         </div>
-
 
                         {/* CONVERSATION INFO */}
 
@@ -2611,6 +3605,7 @@ function Chat() {
                                   {
                                     hour:
                                       "2-digit",
+
                                     minute:
                                       "2-digit",
                                   }
@@ -2620,7 +3615,6 @@ function Chat() {
 
                           </div>
 
-
                           <div className="conversation-bottom">
 
                             <span>
@@ -2628,7 +3622,6 @@ function Chat() {
                                 conversation
                               )}
                             </span>
-
 
                             {conversation.unread_count >
                               0 && (
@@ -2672,6 +3665,7 @@ function Chat() {
       >
 
         {!selectedConversation ? (
+
           <div className="empty-chat-main">
 
             <MessageCircle
@@ -2688,10 +3682,14 @@ function Chat() {
             </p>
 
           </div>
+
         ) : (
+
           <div className="chat-window">
 
-            {/* CHAT HEADER */}
+            {/* =================================================
+                CHAT HEADER
+            ================================================= */}
 
             <div className="chat-header">
 
@@ -2707,11 +3705,15 @@ function Chat() {
               </button>
 
               <div className="avatar">
+
                 {getConversationName(
                   selectedConversation
                 )
-                  .charAt(0)
+                  .charAt(
+                    0
+                  )
                   .toUpperCase()}
+
               </div>
 
               <div className="chat-header-info">
@@ -2722,30 +3724,52 @@ function Chat() {
                   )}
                 </strong>
 
+                {/* ONE TO ONE */}
+
                 {selectedConversation
                   .conversation_type ===
                   "one_to_one" &&
                   selectedUser && (
-                    <span>
 
-                      {typingUserId &&
+                  <span>
+
+                    {typingUserId &&
+                    String(
+                      typingUserId
+                    ) !==
                       String(
-                        typingUserId
-                      ) !==
-                        String(user?.id)
-                        ? "typing..."
-                        : otherUserOnline
-                        ? "online"
-                        : "offline"}
+                        user?.id
+                      )
+                      ? "typing..."
+                      : otherUserOnline
+                      ? "online"
+                      : "offline"}
 
-                      {" • "}
+                    {" • "}
 
-                      {socketConnected
-                        ? "connected"
-                        : "connecting..."}
+                    {socketConnected
+                      ? "connected"
+                      : "connecting..."}
 
-                    </span>
-                  )}
+                  </span>
+                )}
+
+                {/* GROUP */}
+
+                {selectedConversation
+                  .conversation_type ===
+                  "group" && (
+
+                  <span>
+                    {selectedConversation.members?.length ||
+                      0}{" "}
+                    members
+                    {" • "}
+                    {socketConnected
+                      ? "connected"
+                      : "connecting..."}
+                  </span>
+                )}
 
               </div>
 
@@ -2753,14 +3777,20 @@ function Chat() {
                 className="chat-search-button"
                 onClick={() => {
                   setShowMessageSearch(
-                    (previous) =>
+                    (
+                      previous
+                    ) =>
                       !previous
                   );
 
-                  setMessageSearch("");
+                  setMessageSearch(
+                    ""
+                  );
+
                   setMessageSearchResults(
                     []
                   );
+
                   setMessageSearchError(
                     ""
                   );
@@ -2774,9 +3804,12 @@ function Chat() {
 
             </div>
 
-            {/* MESSAGE SEARCH */}
+            {/* =================================================
+                MESSAGE SEARCH
+            ================================================= */}
 
             {showMessageSearch && (
+
               <div className="message-search-panel">
 
                 <div className="message-search-input">
@@ -2838,17 +3871,22 @@ function Chat() {
                   !messageSearchError &&
                   messageSearchResults.length ===
                     0 && (
-                    <div className="message-search-status">
-                      No messages found.
-                    </div>
-                  )}
+
+                  <div className="message-search-status">
+                    No messages found.
+                  </div>
+                )}
 
                 {messageSearchResults.length >
                   0 && (
+
                   <div className="message-search-results">
 
                     {messageSearchResults.map(
-                      (message) => (
+                      (
+                        message
+                      ) => (
+
                         <div
                           key={
                             message.id
@@ -2862,6 +3900,7 @@ function Chat() {
                         >
 
                           <div className="message-search-result-user">
+
                             {message
                               .sender
                               ?.username ||
@@ -2869,15 +3908,19 @@ function Chat() {
                                 .sender
                                 ?.email ||
                               "User"}
+
                           </div>
 
                           <div className="message-search-result-content">
+
                             {
                               message.content
                             }
+
                           </div>
 
                           <div className="message-search-result-time">
+
                             {message.created_at &&
                               new Date(
                                 message.created_at
@@ -2886,10 +3929,12 @@ function Chat() {
                                 {
                                   dateStyle:
                                     "short",
+
                                   timeStyle:
                                     "short",
                                 }
                               )}
+
                           </div>
 
                         </div>
@@ -2902,7 +3947,9 @@ function Chat() {
               </div>
             )}
 
-            {/* MESSAGES */}
+            {/* =================================================
+                MESSAGES
+            ================================================= */}
 
             <div
               className="messages-container"
@@ -2936,30 +3983,46 @@ function Chat() {
                 !messageError &&
                 messages.length ===
                   0 && (
-                  <div className="empty-messages">
 
-                    <MessageCircle
-                      size={45}
-                    />
+                <div className="empty-messages">
 
-                    <p>
-                      No messages yet
-                    </p>
+                  <MessageCircle
+                    size={45}
+                  />
 
-                  </div>
-                )}
+                  <p>
+                    No messages yet
+                  </p>
+
+                </div>
+              )}
 
               {!loadingMessages &&
                 messages.map(
-                  (message) => {
+                  (
+                    message
+                  ) => {
 
                     const senderId =
                       message.sender?.id ??
                       message.sender_id;
 
                     const isOwnMessage =
-                      String(senderId) ===
-                      String(user?.id);
+                      String(
+                        senderId
+                      ) ===
+                      String(
+                        user?.id
+                      );
+
+                    // =================================================
+                    // GROUP SENDER
+                    // =================================================
+
+                    const groupSender =
+                      getGroupMessageSender(
+                        message
+                      );
 
                     return (
                       <div
@@ -2976,33 +4039,62 @@ function Chat() {
 
                         <div className="message-bubble">
 
+                          {/* =================================================
+                              SENDER NAME FOR GROUP
+                          ================================================= */}
+
+                          {!isOwnMessage &&
+                            selectedConversation?.conversation_type ===
+                              "group" && (
+
+                            <div className="message-sender-name">
+
+                              {groupSender?.username ||
+                                groupSender?.email ||
+                                "Unknown User"}
+
+                            </div>
+                          )}
+
+                          {/* MESSAGE */}
+
                           <div className="message-content">
+
                             {
                               message.content
                             }
+
                           </div>
+
+                          {/* META */}
 
                           <div className="message-meta">
 
                             <span>
+
                               {new Date(
                                 message.created_at
                               ).toLocaleTimeString(
                                 [],
                                 {
-                                  hour: "2-digit",
+                                  hour:
+                                    "2-digit",
+
                                   minute:
                                     "2-digit",
                                 }
                               )}
+
                             </span>
 
                             {isOwnMessage && (
+
                               <span
                                 className={`message-status ${
                                   message.status
                                 }`}
                               >
+
                                 {message.status ===
                                 "read"
                                   ? "✓✓"
@@ -3010,6 +4102,7 @@ function Chat() {
                                     "delivered"
                                   ? "✓✓"
                                   : "✓"}
+
                               </span>
                             )}
 
@@ -3024,7 +4117,9 @@ function Chat() {
 
             </div>
 
-            {/* MESSAGE INPUT */}
+            {/* =================================================
+                MESSAGE INPUT
+            ================================================= */}
 
             <div className="message-input-area">
 
