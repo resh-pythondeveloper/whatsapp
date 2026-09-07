@@ -82,7 +82,7 @@ class UserSerializer(serializers.ModelSerializer):
 
         fields = [
             "id",
-            # "email",
+            "email",
             "username",
             # "profile_image",
             "is_online",
@@ -90,4 +90,25 @@ class UserSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
-        read_only_fields = fields
+        read_only_fields = ["id","is_online","last_seen","created_at",]
+
+class EmailChangeSerializer(serializers.Serializer):
+
+    new_email = serializers.EmailField()
+
+    def validate_new_email(self, value):
+        user = self.context["request"].user
+
+        if User.objects.filter(
+            email=value
+        ).exclude(id=user.id).exists():
+            raise serializers.ValidationError(
+                "This email is already registered."
+            )
+
+        if value.lower() == user.email.lower():
+            raise serializers.ValidationError(
+                "This is already your current email."
+            )
+
+        return value.lower()
