@@ -3673,7 +3673,7 @@ function Chat() {
             />
 
             <h2>
-              WhatsApp Clone
+              ConvoX
             </h2>
 
             <p>
