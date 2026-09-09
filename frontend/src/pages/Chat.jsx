@@ -3485,7 +3485,7 @@ function Chat() {
 
               <input
                 type="text"
-                placeholder="Search chats"
+                placeholder="Search users"
                 value={
                   search
                 }

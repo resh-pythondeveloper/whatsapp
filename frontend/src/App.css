@@ -1014,3 +1014,428 @@ body {
   cursor: pointer;
   font-size: 16px;
 }
+
+/* =========================================================
+   REGISTER PAGE
+========================================================= */
+
+.register-page {
+  width: 100%;
+  min-height: 100vh;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: #efeae2;
+}
+
+
+/* =========================================================
+   REGISTER CARD
+========================================================= */
+
+.register-card {
+  width: 100%;
+  max-width: 430px;
+
+  padding: 35px;
+
+  background: #ffffff;
+
+  border-radius: 12px;
+
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+
+/* =========================================================
+   LOGO
+========================================================= */
+
+.register-logo {
+  width: 60px;
+  height: 60px;
+
+  margin: 0 auto 15px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #e9edef;
+
+  color: #54656f;
+}
+
+
+/* =========================================================
+   TITLE
+========================================================= */
+
+.register-card h1 {
+  margin: 0;
+
+  text-align: center;
+
+  font-size: 26px;
+
+  color: #111b21;
+}
+
+.register-subtitle {
+  margin: 8px 0 25px;
+
+  text-align: center;
+
+  font-size: 14px;
+
+  color: #667781;
+}
+
+
+/* =========================================================
+   ERROR
+========================================================= */
+
+.register-error {
+  margin-bottom: 18px;
+
+  padding: 10px 12px;
+
+  border-radius: 6px;
+
+  background: #fff1f0;
+
+  color: #d32f2f;
+
+  font-size: 13px;
+}
+
+
+/* =========================================================
+   FIELD
+========================================================= */
+
+.register-field {
+  margin-bottom: 18px;
+}
+
+.register-field label {
+  display: block;
+
+  margin-bottom: 7px;
+
+  font-size: 14px;
+
+  font-weight: 600;
+
+  color: #111b21;
+}
+
+.register-field input {
+  width: 100%;
+
+  height: 44px;
+
+  padding: 0 12px;
+
+  border: 1px solid #d1d7db;
+
+  border-radius: 7px;
+
+  outline: none;
+
+  font-size: 14px;
+
+  box-sizing: border-box;
+}
+
+.register-field input:focus {
+  border-color: #8696a0;
+}
+
+
+/* =========================================================
+   PASSWORD
+========================================================= */
+
+.password-input-wrapper {
+  position: relative;
+}
+
+.password-input-wrapper input {
+  padding-right: 45px;
+}
+
+.password-toggle {
+  position: absolute;
+
+  top: 50%;
+  right: 10px;
+
+  transform: translateY(-50%);
+
+  width: 32px;
+  height: 32px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+
+  background: transparent;
+
+  color: #667781;
+
+  cursor: pointer;
+}
+
+
+/* =========================================================
+   REGISTER BUTTON
+========================================================= */
+
+.register-button {
+  width: 100%;
+
+  height: 46px;
+
+  margin-top: 5px;
+
+  border: none;
+
+  border-radius: 7px;
+
+  background: #111b21;
+
+  color: #ffffff;
+
+  font-size: 15px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.register-button:hover {
+  background: #26343b;
+}
+
+.register-button:disabled {
+  opacity: 0.6;
+
+  cursor: not-allowed;
+}
+
+
+/* =========================================================
+   LOGIN
+========================================================= */
+
+.register-login {
+  margin-top: 22px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 5px;
+
+  font-size: 14px;
+
+  color: #667781;
+}
+
+.register-login button {
+  border: none;
+
+  background: transparent;
+
+  color: #111b21;
+
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 500px) {
+
+  .register-page {
+    padding: 15px;
+  }
+
+  .register-card {
+    padding: 25px 20px;
+  }
+
+  .register-card h1 {
+    font-size: 23px;
+  }
+
+}
+
+.verify-email-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f2f5;
+  padding: 20px;
+}
+
+.verify-email-card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  padding: 35px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+
+.verify-email-logo {
+  width: 65px;
+  height: 65px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #25d366;
+  color: white;
+}
+
+.verify-email-card h1 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.verify-email-subtitle {
+  margin: 12px 0 5px;
+  color: #667781;
+}
+
+.verify-email-address {
+  margin: 0 0 25px;
+  font-weight: 600;
+  color: #111b21;
+  word-break: break-word;
+}
+
+.verify-email-error {
+  margin-bottom: 15px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #ffe5e5;
+  color: #d32f2f;
+  font-size: 14px;
+}
+
+.verify-email-success {
+  margin-bottom: 15px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #e5f8ed;
+  color: #16833a;
+  font-size: 14px;
+}
+
+.verify-email-field {
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.verify-email-field label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.verify-email-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px;
+  border: 1px solid #d1d7db;
+  border-radius: 7px;
+  outline: none;
+  font-size: 18px;
+  text-align: center;
+  letter-spacing: 6px;
+}
+
+.verify-email-field input:focus {
+  border-color: #25d366;
+}
+
+.verify-email-button {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 7px;
+  background: #25d366;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.verify-email-button:hover {
+  background: #20bd5a;
+}
+
+.verify-email-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.verify-email-back {
+  margin-top: 20px;
+}
+
+.verify-email-back button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: #128c7e;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.verify-email-back button:hover {
+  text-decoration: underline;
+}
+
+.login-register {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.login-register button {
+  margin-left: 6px;
+  border: none;
+  background: none;
+  color: #128c7e;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-register button:hover {
+  text-decoration: underline;
+}

@@ -7,12 +7,12 @@ import {
 
 import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
-
+import Register from "./pages/Register";
 import {
   AuthProvider,
   useAuth,
 } from "./context/AuthContext";
-
+import VerifyEmail from "./pages/VerifyEmail";
 import Chat from "./pages/Chat";
 
 import "./App.css";
@@ -29,6 +29,15 @@ function App() {
           <Route
             path="/login"
             element={<Login />}
+          />
+          <Route
+            path="/register"
+            element={<Register />}
+          />
+
+          <Route
+            path="/verify-email"
+            element={<VerifyEmail />}
           />
 
           <Route

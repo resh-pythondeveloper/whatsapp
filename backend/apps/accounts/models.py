@@ -18,6 +18,7 @@ class User(AbstractUser):
         null=True,
         blank=True
     )
+    is_verified = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -27,6 +28,12 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+    
+class EmailVerify(models.Model):
+    user=models.ForeignKey(User,on_delete=models.CASCADE)
+    otp=models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expired_at=models.DateTimeField()
 
 class EmailVerifyOTP(models.Model):
     user = models.ForeignKey(

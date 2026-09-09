@@ -61,7 +61,7 @@ function Login() {
 
       <div className="login-card">
 
-        <h1>WhatsApp Clone</h1>
+        <h1>ConvoX</h1>
 
         <p className="login-subtitle">
           Login to continue
@@ -103,6 +103,19 @@ function Login() {
           </button>
 
         </form>
+
+        <div className="login-register">
+          <span>
+            Don't have an account?
+          </span>
+
+          <button
+            type="button"
+            onClick={() => navigate("/register")}
+          >
+            Register
+          </button>
+        </div>
 
       </div>
 
