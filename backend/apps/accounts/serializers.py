@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import User
 from django.contrib.auth import authenticate
+from .validators import validate_profile_image
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
@@ -76,6 +77,11 @@ class LoginSerializer(serializers.Serializer):
         return attrs
 
 class UserSerializer(serializers.ModelSerializer):
+    profile_image = serializers.ImageField(
+        required=False,
+        allow_null=True,
+        validators=[validate_profile_image]
+    )
 
     class Meta:
         model = User
@@ -84,13 +90,14 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "email",
             "username",
-            # "profile_image",
+            "profile_image",
             "is_online",
             "last_seen",
             "created_at",
         ]
 
         read_only_fields = ["id","is_online","last_seen","created_at",]
+
 
 class EmailChangeSerializer(serializers.Serializer):
 

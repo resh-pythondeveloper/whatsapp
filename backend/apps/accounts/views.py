@@ -4,11 +4,13 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.db.models import Q
 from .serializers import RegisterSerializer,LoginSerializer,UserSerializer,EmailChangeSerializer
-from .services import AuthService
+from .services import AuthService,ProfileService
 from apps.accounts.models import User,EmailVerifyOTP
 from rest_framework.permissions import IsAuthenticated
 from apps.chats.models import Conversation, ConversationMember
 from django.db import transaction
+from rest_framework.parsers import MultiPartParser, FormParser
+
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
@@ -64,6 +66,7 @@ class LoginView(APIView):
 
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser,]
 
     def get(self, request):
 
@@ -76,70 +79,172 @@ class ProfileView(APIView):
         )
 
     def patch(self, request):
-    
-            user = User.objects.get(
-                id=request.user.id,
-                is_active=True
+
+        user = User.objects.get(
+            id=request.user.id,
+            is_active=True
+        )
+
+        # =====================================================
+        # EMAIL CHANGE
+        # =====================================================
+
+        new_email = request.data.get("email")
+
+        if new_email:
+
+            serializer = EmailChangeSerializer(
+                data={
+                    "new_email": new_email
+                },
+                context={
+                    "request": request
+                }
             )
-    
-            # Check whether email is being changed
-            new_email = request.data.get("email")
-    
-            if new_email:
-    
-                serializer = EmailChangeSerializer(
-                    data={"new_email": new_email},
-                    context={"request": request}
-                )
-    
-                serializer.is_valid(raise_exception=True)
-    
-                new_email = serializer.validated_data["new_email"]
-    
-                # Generate OTP
-                otp = AuthService.generate_otp()
-    
-                # Optional: invalidate previous OTPs
-                EmailVerifyOTP.objects.filter(
-                    user=user,
-                    is_verified=False
-                ).update(is_verified=True)
-    
-                # Create new OTP
-                EmailVerifyOTP.objects.create(
-                    new_email=new_email,
-                    user=user,
-                    otp=otp
-                )
-    
-                # Send OTP
-                AuthService.send_email_to_otp(
-                    new_email,
-                    otp
-                )
-    
-                return Response(
-                    {
-                        "message": "OTP sent to your new email address.",
-                        "email": new_email
-                    },
-                    status=status.HTTP_200_OK
-                )
-    
-            # Update other allowed fields
-            serializer = UserSerializer(
-                user,
-                data=request.data,
-                partial=True
+
+            serializer.is_valid(
+                raise_exception=True
             )
-    
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-    
+
+            new_email = serializer.validated_data["new_email"]
+
+            otp = AuthService.generate_otp()
+
+            EmailVerifyOTP.objects.filter(
+                user=user,
+                is_verified=False
+            ).update(
+                is_verified=True
+            )
+
+            EmailVerifyOTP.objects.create(
+                user=user,
+                new_email=new_email,
+                otp=otp
+            )
+
+            AuthService.send_email_to_otp(
+                new_email,
+                otp
+            )
+
             return Response(
-                serializer.data,
+                {
+                    "message": "OTP sent to your new email address.",
+                    "email": new_email
+                },
                 status=status.HTTP_200_OK
             )
+
+        # =====================================================
+        # PROFILE UPDATE
+        # =====================================================
+
+        serializer = UserSerializer(
+            user,
+            data=request.data,
+            partial=True,
+            context={
+                "request": request
+            }
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        # =====================================================
+        # PROFILE IMAGE
+        # =====================================================
+
+        if "profile_image" in serializer.validated_data:
+
+            new_image = serializer.validated_data.pop(
+                "profile_image"
+            )
+
+            if new_image is None:
+
+                ProfileService.remove_profile_image(
+                    user
+                )
+
+            else:
+
+                ProfileService.update_profile_image(
+                    user,
+                    new_image
+                )
+
+        # Save username / other fields
+        serializer.save()
+
+        user.refresh_from_db()
+
+        response_serializer = UserSerializer(
+            user,
+            context={
+                "request": request
+            }
+        )
+
+        return Response(
+            {
+                "message": "Profile updated successfully.",
+                "user": response_serializer.data
+            },
+            status=status.HTTP_200_OK
+        ) 
+
+    def delete(self, request):
+
+        user = User.objects.get(
+            id=request.user.id,
+            is_active=True
+        )
+        if user.profile_image:
+            ProfileService.delete_profile_image(
+                user
+            )
+
+        user.delete()
+
+        return Response(
+            {
+                "message": (
+                    "Profile deleted successfully."
+                )
+            },
+            status=status.HTTP_200_OK
+        )
+
+class ProfileImageView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+
+        user = User.objects.get(
+            id=request.user.id,
+            is_active=True
+        )
+
+        if not user.profile_image:
+            return Response(
+                {
+                    "message": "Profile image doesn't exist."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        ProfileService.remove_profile_image(user)
+
+        return Response(
+            {
+                "message": "Profile image removed successfully."
+            },
+            status=status.HTTP_200_OK
+        )
 
 class UserSearchView(APIView):
     permission_classes = [IsAuthenticated]

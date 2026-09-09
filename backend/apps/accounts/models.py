@@ -6,11 +6,11 @@ from datetime import timedelta
 class User(AbstractUser):
     email = models.EmailField(unique=True)
 
-    # profile_image = models.ImageField(
-    #     upload_to="profiles/",
-    #     null=True,
-    #     blank=True
-    # )
+    profile_image = models.ImageField(
+        upload_to="profiles/",
+        null=True,
+        blank=True
+    )
 
     is_online = models.BooleanField(default=False)
 
