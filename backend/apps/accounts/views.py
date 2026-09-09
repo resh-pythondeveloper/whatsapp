@@ -2,28 +2,16 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from django.db.models import Q
 from .serializers import RegisterSerializer,LoginSerializer,UserSerializer,EmailChangeSerializer
 from .services import AuthService,ProfileService
-from apps.accounts.models import User,EmailVerifyOTP,EmailVerify
+from apps.accounts.models import User
 from rest_framework.permissions import IsAuthenticated
 from apps.chats.models import Conversation, ConversationMember
 from django.db import transaction
 from rest_framework.parsers import MultiPartParser, FormParser
-
+from django.utils import timezone
 
 from datetime import timedelta
-
-from django.utils import timezone
-from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-from rest_framework import status
-
-from .serializers import RegisterSerializer
-from .models import User, EmailVerify
-from .services import AuthService
-
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
@@ -38,39 +26,12 @@ class RegisterView(APIView):
             raise_exception=True
         )
 
-        email = serializer.validated_data["email"]
-
-        # Generate OTP
-        otp = AuthService.generate_otp()
-
         # Create user
         user = serializer.save()
 
-        user.is_active = False
-        user.save(update_fields=["is_active"])
-
-        # OTP expiration time - 5 minutes
-        expired_at = (
-            timezone.now() +
-            timedelta(minutes=5)
-        )
-
-        # Save OTP
-        EmailVerify.objects.create(
-            user=user,
-            otp=otp,
-            expired_at=expired_at
-        )
-
-        # Send OTP email
-        AuthService.send_email_to_otp(
-            email,
-            otp
-        )
-
         return Response(
             {
-                "message": "User registered successfully. OTP sent to your email.",
+                "message": "User registered successfully.",
                 "user": {
                     "id": user.id,
                     "email": user.email,
@@ -78,93 +39,6 @@ class RegisterView(APIView):
                 },
             },
             status=status.HTTP_201_CREATED
-        )
-
-class UserEmailVerifyView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-
-        email = request.data.get("email")
-        otp = request.data.get("otp")
-
-        if not email:
-            return Response(
-                {
-                    "message": "Email is required."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if not otp:
-            return Response(
-                {
-                    "message": "OTP is required."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            user = User.objects.get(
-                email=email,
-                is_verified=False
-            )
-        except User.DoesNotExist:
-            return Response(
-                {
-                    "message": "User not found or email already verified."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        email_verify = (
-            EmailVerify.objects
-            .filter(user=user)
-            .order_by("-created_at")
-            .first()
-        )
-
-        if not email_verify:
-            return Response(
-                {
-                    "message": "OTP not found."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if email_verify.otp != otp:
-            return Response(
-                {
-                    "message": "Enter valid OTP."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if email_verify.expired_at < timezone.now():
-            return Response(
-                {
-                    "message": "OTP expired."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        user.is_verified = True
-        user.is_active = True
-
-        user.save(
-            update_fields=[
-                "is_verified",
-                "is_active"
-            ]
-        )
-
-        email_verify.delete()
-
-        return Response(
-            {
-                "message": "Email verified successfully."
-            },
-            status=status.HTTP_200_OK
         )
 
 class LoginView(APIView):
@@ -236,31 +110,13 @@ class ProfileView(APIView):
             )
 
             new_email = serializer.validated_data["new_email"]
-
-            otp = AuthService.generate_otp()
-
-            EmailVerifyOTP.objects.filter(
-                user=user,
-                is_verified=False
-            ).update(
-                is_verified=True
-            )
-
-            EmailVerifyOTP.objects.create(
-                user=user,
-                new_email=new_email,
-                otp=otp
-            )
-
-            AuthService.send_email_to_otp(
-                new_email,
-                otp
-            )
+            user.email = new_email
+            user.save(update_fields=["email"])
 
             return Response(
                 {
-                    "message": "OTP sent to your new email address.",
-                    "email": new_email
+                    "message": "Email updated successfully.",
+                    "email": user.email
                 },
                 status=status.HTTP_200_OK
             )
@@ -468,92 +324,3 @@ class ListUsersView(APIView):
         return Response(serializer.data,status=status.HTTP_200_OK)
 
     
-
-class VerifyEmailChangeOTPView(APIView):
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-
-        user = User.objects.get(
-            id=request.user.id,
-            is_active=True
-        )
-
-        otp = request.data.get("otp")
-
-        if not otp:
-            return Response(
-                {
-                    "message": "OTP is required."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        otp_obj = EmailVerifyOTP.objects.filter(
-            user=user,
-            is_verified=False
-        ).order_by("-created_at").first()
-
-        if not otp_obj:
-            return Response(
-                {
-                    "message": "OTP not found or already verified."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if otp_obj.is_expired():
-            otp_obj.delete()
-            return Response(
-                {
-                    "message": "OTP has expired."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if str(otp_obj.otp).strip() != str(otp).strip():
-            return Response(
-                {"message": "Invalid OTP."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Update email
-        with transaction.atomic():
-
-            if (
-                User.objects
-                .filter(
-                    email=otp_obj.new_email
-                )
-                .exclude(
-                    id=user.id
-                )
-                .exists()
-            ):
-
-                return Response(
-                    {
-                        "message":
-                            "This email is already registered."
-                    },
-
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            user.email = otp_obj.new_email
-            user.save(
-                update_fields=[
-                    "email",
-                ]
-            )
-
-            otp_obj.delete()
-
-        return Response(
-            {
-                "message": "Email address updated successfully.",
-                "email": user.email
-            },
-            status=status.HTTP_200_OK
-        )

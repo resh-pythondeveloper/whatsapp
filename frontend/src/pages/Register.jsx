@@ -37,7 +37,7 @@ function Register() {
     setError("");
 
     const username = formData.username.trim();
-    const email = formData.email.trim();
+    const email = formData.email.trim().toLowerCase();
 
     if (!username) {
       setError("Username is required.");
@@ -55,26 +55,17 @@ function Register() {
     }
 
     if (formData.password.length < 8) {
-      setError(
-        "Password must be at least 8 characters."
-      );
+      setError("Password must be at least 8 characters.");
       return;
     }
 
     if (!formData.password_confirm) {
-      setError(
-        "Please confirm your password."
-      );
+      setError("Please confirm your password.");
       return;
     }
 
-    if (
-      formData.password !==
-      formData.password_confirm
-    ) {
-      setError(
-        "Passwords do not match."
-      );
+    if (formData.password !== formData.password_confirm) {
+      setError("Passwords do not match.");
       return;
     }
 
@@ -87,43 +78,20 @@ function Register() {
           username,
           email,
           password: formData.password,
-          password_confirm:
-            formData.password_confirm,
+          password_confirm: formData.password_confirm,
         }
       );
 
-      console.log(
-        "Register response:",
-        response.data
-      );
+      console.log("Register response:", response.data);
 
-      /*
-       * Save email temporarily so OTP page
-       * knows which email to verify.
-       */
-      sessionStorage.setItem(
-        "verification_email",
-        email
-      );
-
-      /*
-       * Go to OTP verification page.
-       */
-      navigate("/verify-email");
+      // Registration successful
+      navigate("/login");
 
     } catch (error) {
-      console.error(
-        "Registration failed:",
-        error
-      );
+      console.error("Registration failed:", error);
+      console.error("Response:", error.response?.data);
 
-      console.error(
-        "Response:",
-        error.response?.data
-      );
-
-      const data =
-        error.response?.data;
+      const data = error.response?.data;
 
       if (data?.email) {
         setError(
@@ -143,13 +111,9 @@ function Register() {
             ? data.password[0]
             : data.password
         );
-      } else if (
-        data?.password_confirm
-      ) {
+      } else if (data?.password_confirm) {
         setError(
-          Array.isArray(
-            data.password_confirm
-          )
+          Array.isArray(data.password_confirm)
             ? data.password_confirm[0]
             : data.password_confirm
         );
@@ -158,9 +122,7 @@ function Register() {
       } else if (data?.message) {
         setError(data.message);
       } else {
-        setError(
-          "Unable to create account."
-        );
+        setError("Unable to create account.");
       }
 
     } finally {
@@ -173,23 +135,15 @@ function Register() {
 
       <div className="register-card">
 
-        {/* LOGO */}
-
         <div className="register-logo">
           <UserPlus size={32} />
         </div>
 
-        {/* TITLE */}
-
-        <h1>
-          Create Account
-        </h1>
+        <h1>Create Account</h1>
 
         <p className="register-subtitle">
           Create your account to start chatting
         </p>
-
-        {/* ERROR */}
 
         {error && (
           <div className="register-error">
@@ -197,17 +151,11 @@ function Register() {
           </div>
         )}
 
-        {/* FORM */}
-
         <form onSubmit={handleSubmit}>
 
           {/* USERNAME */}
-
           <div className="register-field">
-
-            <label>
-              Username
-            </label>
+            <label>Username</label>
 
             <input
               type="text"
@@ -218,17 +166,11 @@ function Register() {
               disabled={loading}
               autoComplete="username"
             />
-
           </div>
 
-
           {/* EMAIL */}
-
           <div className="register-field">
-
-            <label>
-              Email
-            </label>
+            <label>Email</label>
 
             <input
               type="email"
@@ -239,26 +181,16 @@ function Register() {
               disabled={loading}
               autoComplete="email"
             />
-
           </div>
 
-
           {/* PASSWORD */}
-
           <div className="register-field">
-
-            <label>
-              Password
-            </label>
+            <label>Password</label>
 
             <div className="password-input-wrapper">
 
               <input
-                type={
-                  showPassword
-                    ? "text"
-                    : "password"
-                }
+                type={showPassword ? "text" : "password"}
                 name="password"
                 placeholder="Enter password"
                 value={formData.password}
@@ -271,8 +203,7 @@ function Register() {
                 type="button"
                 onClick={() =>
                   setShowPassword(
-                    (previous) =>
-                      !previous
+                    (previous) => !previous
                   )
                 }
                 disabled={loading}
@@ -286,17 +217,11 @@ function Register() {
               </button>
 
             </div>
-
           </div>
 
-
           {/* CONFIRM PASSWORD */}
-
           <div className="register-field">
-
-            <label>
-              Confirm Password
-            </label>
+            <label>Confirm Password</label>
 
             <div className="password-input-wrapper">
 
@@ -308,9 +233,7 @@ function Register() {
                 }
                 name="password_confirm"
                 placeholder="Confirm password"
-                value={
-                  formData.password_confirm
-                }
+                value={formData.password_confirm}
                 onChange={handleChange}
                 disabled={loading}
                 autoComplete="new-password"
@@ -320,8 +243,7 @@ function Register() {
                 type="button"
                 onClick={() =>
                   setShowConfirmPassword(
-                    (previous) =>
-                      !previous
+                    (previous) => !previous
                   )
                 }
                 disabled={loading}
@@ -335,12 +257,9 @@ function Register() {
               </button>
 
             </div>
-
           </div>
 
-
           {/* REGISTER BUTTON */}
-
           <button
             type="submit"
             className="register-button"
@@ -353,9 +272,6 @@ function Register() {
 
         </form>
 
-
-        {/* LOGIN */}
-
         <div className="register-login">
 
           <span>
@@ -364,9 +280,7 @@ function Register() {
 
           <button
             type="button"
-            onClick={() =>
-              navigate("/login")
-            }
+            onClick={() => navigate("/login")}
           >
             Login
           </button>
